@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Recipe Gallery</title>
+    <style>
+        body { font-family: Arial; padding: 20px; }
+        .filter-container { margin-bottom: 20px; }
+        .recipe-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        .card { border: 1px solid #ccc; border-radius: 5px; padding: 10px; }
+        img { width: 100%; border-radius: 5px; }
+        .tag-label { margin-right: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>🍽️ Recipe Gallery</h1>
+
+    <form method="get" class="filter-container">
+        <strong>Filter by tags:</strong><br>
+        {% for tag in ['chicken', 'asian', 'swedish', 'vegetarian', 'quick', 'potato', 'meat'] %}
+            <label class="tag-label">
+                <input type="checkbox" name="tag" value="{{ tag }}"
+                    {% if tag in selected_tags %}checked{% endif %}>
+                {{ tag }}
+            </label>
+        {% endfor %}
+        <br><br>
+        <button type="submit">Apply Filters</button>
+        <a href="/" style="margin-left: 10px;">Clear</a>
+    </form>
+
+    <div class="recipe-grid">
+        {% for recipe in recipes %}
+        <div class="card">
+            <img src="{{ recipe[5] or 'https://via.placeholder.com/250x150?text=No+Image' }}" alt="Image of {{ recipe[1] }}">
+            <h3>{{ recipe[1] }}</h3>
+            <p>{{ recipe[2] }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+</body>
+</html>

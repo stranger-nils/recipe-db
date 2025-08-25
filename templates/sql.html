@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>SQL Sandbox</title>
+    <style>
+        textarea { width: 100%; height: 150px; }
+        pre { background: #f0f0f0; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 SQL Sandbox</h1>
+    <form method="post">
+        <label for="query">Skriv din SQL-query:</label><br>
+        <textarea name="query" id="query">{{ query }}</textarea><br><br>
+        <button type="submit">Kör</button>
+    </form>
+
+    {% if error %}
+        <h3 style="color: red;">Fel:</h3>
+        <pre>{{ error }}</pre>
+    {% elif result %}
+        <h3>Resultat:</h3>
+        <pre>{{ result }}</pre>
+    {% endif %}
+</body>
+</html>
