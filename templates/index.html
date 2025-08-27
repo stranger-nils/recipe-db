@@ -14,31 +14,66 @@
 </head>
 <body>
 
-    <h1>🍽️ Recipe Gallery</h1>
+<div style="display: flex; gap: 20px;">
+    <!-- Left: Recipe gallery -->
+    <div style="flex: 2;">
+        <h1>🍽️ Recipe Gallery</h1>
 
-    <form method="get" class="filter-container">
-        <strong>Filter by tags:</strong><br>
-        {% for tag in ['chicken', 'asian', 'swedish', 'vegetarian', 'quick', 'potato', 'meat'] %}
-            <label class="tag-label">
-                <input type="checkbox" name="tag" value="{{ tag }}"
-                    {% if tag in selected_tags %}checked{% endif %}>
-                {{ tag }}
-            </label>
-        {% endfor %}
-        <br><br>
-        <button type="submit">Apply Filters</button>
-        <a href="/" style="margin-left: 10px;">Clear</a>
-    </form>
+        <form method="get" class="filter-container">
+            <strong>Filter by tags:</strong><br>
+            {% for tag in ['chicken', 'asian', 'swedish', 'vegetarian', 'quick', 'potato', 'meat'] %}
+                <label class="tag-label">
+                    <input type="checkbox" name="tag" value="{{ tag }}"
+                        {% if tag in selected_tags %}checked{% endif %}>
+                    {{ tag }}
+                </label>
+            {% endfor %}
+            <br><br>
+            <button type="submit">Apply Filters</button>
+            <a href="/" style="margin-left: 10px;">Clear</a>
+        </form>
 
-    <div class="recipe-grid">
-        {% for recipe in recipes %}
-        <div class="card">
-            <img src="{{ recipe[5] or 'https://via.placeholder.com/250x150?text=No+Image' }}" alt="Image of {{ recipe[1] }}">
-            <h3>{{ recipe[1] }}</h3>
-            <p>{{ recipe[2] }}</p>
+        <div class="recipe-grid">
+            {% for recipe in recipes %}
+            <div class="card">
+                <img src="{{ recipe[5] or 'https://via.placeholder.com/250x150?text=No+Image' }}" alt="Image of {{ recipe[1] }}">
+                <h3>{{ recipe[1] }}</h3>
+                <p>{{ recipe[2] }}</p>
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
     </div>
+
+    <!-- Right: AI chat -->
+    <div style="flex: 1; max-width: 400px;">
+        <h2>🤖 Recipe AI</h2>
+        <form id="chat-form">
+            <textarea id="chat-input" name="message" placeholder="Ask the AI something..." style="width: 100%; height: 80px;"></textarea><br>
+            <button type="submit">Send</button>
+        </form>
+        <div id="chat-output" style="margin-top: 20px; white-space: pre-wrap;"></div>
+    </div>
+</div>
+
+<script>
+document.getElementById('chat-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const input = document.getElementById('chat-input').value;
+    const responseDiv = document.getElementById('chat-output');
+    responseDiv.innerText = "Thinking...";
+
+    const formData = new FormData();
+    formData.append("message", input);
+
+    const response = await fetch("/chat", {
+        method: "POST",
+        body: formData
+    });
+
+    const text = await response.text();
+    responseDiv.innerText = text;
+});
+</script>
 
 </body>
 </html>
