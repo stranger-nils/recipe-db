@@ -1,2 +1,3 @@
 recept.db 
 .env
+.flask_session/
