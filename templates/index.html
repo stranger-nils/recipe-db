@@ -35,11 +35,13 @@
 
         <div class="recipe-grid">
             {% for recipe in recipes %}
-            <div class="card">
-                <img src="{{ recipe[5] or 'https://via.placeholder.com/250x150?text=No+Image' }}" alt="Image of {{ recipe[1] }}">
-                <h3>{{ recipe[1] }}</h3>
-                <p>{{ recipe[2] }}</p>
-            </div>
+            <a href="/recipe/{{ recipe[0] }}">
+                <div class="recipe-card">
+                    <h3>{{ recipe[1] }}</h3>
+                    <img src="{{ recipe[5] or 'https://via.placeholder.com/250x150?text=No+Image' }}" alt="Image of {{ recipe[1] }}">
+                    <p>{{ recipe[2] }}</p>
+                </div>
+            </a>
             {% endfor %}
         </div>
     </div>

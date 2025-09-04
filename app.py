@@ -16,6 +16,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY")
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
+
 @app.route('/')
 def index():
     selected_tags = request.args.getlist('tag')  # Supports multiple tags via ?tag=chicken&tag=swedish
@@ -32,6 +33,7 @@ def index():
     recipes = c.fetchall()
     conn.close()
     return render_template('index.html', recipes=recipes, selected_tags=selected_tags)
+
 
 @app.route('/sql', methods=['GET', 'POST'])
 def sql_sandbox():
@@ -56,6 +58,7 @@ def sql_sandbox():
             error = str(e)
 
     return render_template('sql.html', result=result, error=error, query=query)
+
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -89,6 +92,20 @@ def chat():
     session.modified = True
 
     return reply
+
+
+@app.route('/recipe/<int:recipe_id>')
+def recipe_detail(recipe_id):
+    conn = sqlite3.connect('recipe.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM recipe WHERE id=?", (recipe_id,))
+    recipe = c.fetchone()
+    conn.close()
+    if recipe:
+        return render_template('recipe_detail.html', recipe=recipe)
+    else:
+        return "Recipe not found", 404
+
 
 if __name__ == '__main__':
     app.run(debug=True)

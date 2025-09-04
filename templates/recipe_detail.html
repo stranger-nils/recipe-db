@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ recipe[1] }}</title>
+    <style>
+        body { font-family: Arial; max-width: 800px; margin: 40px auto; }
+        img { width: 100%; border-radius: 8px; margin-bottom: 20px; }
+        .back { margin-bottom: 20px; display: block; }
+        pre { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+    <a href="/" class="back">← Back to gallery</a>
+
+    <h1>{{ recipe[1] }}</h1>
+    <img src="{{ recipe[5] or 'https://via.placeholder.com/600x300?text=No+Image' }}" alt="Image of {{ recipe[1] }}">
+    <p><strong>Description:</strong> {{ recipe[2] }}</p>
+
+    <h2>Ingredients</h2>
+    <pre>{{ recipe[3] }}</pre>
+
+    <h2>Instructions</h2>
+    <pre>{{ recipe[4] }}</pre>
+
+    <p><strong>Tags:</strong> {{ recipe[6] }}</p>
+
+</body>
+</html>
