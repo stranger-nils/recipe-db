@@ -1,3 +1,4 @@
-recipe.db 
+recipe.db
 .env
-.flask_session/
+flask_session/
+static/uploads/

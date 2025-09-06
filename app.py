@@ -1,9 +1,10 @@
 from dotenv import load_dotenv
 from openai import OpenAI
 import os
-from flask import Flask, request, render_template, session
+from flask import Flask, request, render_template, session, redirect, url_for
 from flask_session import Session
 import sqlite3
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 
@@ -11,6 +12,15 @@ client = OpenAI()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
+
+UPLOAD_FOLDER = 'static/uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Use server-side session storage
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -105,6 +115,82 @@ def recipe_detail(recipe_id):
         return render_template('recipe_detail.html', recipe=recipe)
     else:
         return "Recipe not found", 404
+
+@app.route('/recipe/<int:recipe_id>/edit', methods=['GET', 'POST'])
+def edit_recipe(recipe_id):
+    conn = sqlite3.connect('recipe.db')
+    c = conn.cursor()
+    if request.method == 'POST':
+        title = request.form['title']
+        description = request.form['description']
+        ingredients = request.form['ingredients']
+        instructions = request.form['instructions']
+        notes = request.form['notes']
+        tags = request.form['tags']
+
+        # Get the current image_url from the database
+        c.execute("SELECT image_url FROM recipe WHERE id=?", (recipe_id,))
+        current_image_url = c.fetchone()[0]
+
+        # Handle file upload
+        file = request.files.get('image_file')
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            image_url = '/' + filepath.replace('\\', '/')
+        else:
+            image_url = current_image_url  # Keep the old image if no new file is uploaded
+
+        c.execute('''
+            UPDATE recipe
+            SET title=?, description=?, ingredients=?, instructions=?, notes=?, image_url=?, tags=?
+            WHERE id=?
+        ''', (title, description, ingredients, instructions, notes, image_url, tags, recipe_id))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('recipe_detail', recipe_id=recipe_id))
+    else:
+        c.execute("SELECT * FROM recipe WHERE id=?", (recipe_id,))
+        recipe = c.fetchone()
+        conn.close()
+        if recipe:
+            return render_template('edit_recipe.html', recipe=recipe)
+        else:
+            return "Recipe not found", 404
+
+@app.route('/recipe/new/edit', methods=['GET', 'POST'])
+def new_recipe():
+    if request.method == 'POST':
+        title = request.form['title']
+        description = request.form['description']
+        ingredients = request.form['ingredients']
+        instructions = request.form['instructions']
+        notes = request.form['notes']
+        tags = request.form['tags']
+
+        image_url = ''
+        file = request.files.get('image_file')
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            image_url = '/' + filepath.replace('\\', '/')
+
+        conn = sqlite3.connect('recipe.db')
+        c = conn.cursor()
+        c.execute('''
+            INSERT INTO recipe (title, description, ingredients, instructions, notes, image_url, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (title, description, ingredients, instructions, notes, image_url, tags))
+        recipe_id = c.lastrowid
+        conn.commit()
+        conn.close()
+        return redirect(url_for('recipe_detail', recipe_id=recipe_id))
+    else:
+        # Empty recipe for the form
+        empty_recipe = [None, '', '', '', '', '', '', '']
+        return render_template('edit_recipe.html', recipe=empty_recipe, is_new=True)
 
 
 if __name__ == '__main__':
