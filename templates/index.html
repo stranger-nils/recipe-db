@@ -4,18 +4,74 @@
     <meta charset="UTF-8">
     <title>Recipe Gallery</title>
     <style>
-        body { font-family: Arial; padding: 20px; }
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .main-layout { display: flex; gap: 40px; }
+        .main-content { flex: 2; }
+        .sidebar { flex: 1; max-width: 400px; min-width: 200px; }
         .filter-container { margin-bottom: 20px; }
-        .recipe-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
-        .card { border: 1px solid #ccc; border-radius: 5px; padding: 10px; }
+        .recipe-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+            gap: 32px;
+            margin-top: 20px;
+            align-items: stretch; /* Ensures all cards in a row are same height */
+        }
+        .recipe-grid a:visited,
+        .recipe-grid a:active,
+        .recipe-grid a:hover {
+            color: inherit;
+        }
+        .recipe-grid a {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .recipe-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 0px 5px 14px 5px;
+            background: #fff;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+            transition: box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: left;
+            box-sizing: border-box;
+        }
+        .recipe-card p {
+            margin: 0;
+            font-size: 1em;
+            color: #444;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 3;
+            line-clamp: 3;
+            white-space: normal;
+            line-height: 1.3em;         /* Set explicit line height */
+            min-height: 3.9em;          /* 3 lines × 1.3em */
+            max-height: 3.9em;
+        }
+        .recipe-card h3 {
+            margin: 10px 0 8px 0;
+            font-size: 1.1em;
+            font-weight: bold;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;           /* Only one line */
+        }
+        .recipe-card:hover {
+            box-shadow: 0 8px 24px rgba(0,0,0,0.13);
+        }
         img { width: 100%; border-radius: 5px; }
         .tag-label { margin-right: 10px; }
         .image-square {
-            width: 300px;           /* Set your desired square size */
-            height: 300px;
+            width: 100%; 
+            aspect-ratio: 1/1;        /* Or 1/1 for square, or 16/10, etc. */
             overflow: hidden;
-            border-radius: 8px;
-            margin-bottom: 20px;
+            border-radius: 4px;
+            margin: 0 auto 6px auto; 
             display: flex;
             align-items: center;
             justify-content: center;
@@ -24,79 +80,50 @@
         .image-square img {
             width: 100%;
             height: 100%;
-            object-fit: cover;      /* This crops and centers the image */
+            object-fit: contain;
             object-position: center;
             display: block;
+            background: #eee;
         }
     </style>
 </head>
 <body>
+    <div class="main-layout">
+        <div class="main-content">
+            <h1>Nils's Cookbook</h1>
+            <a href="{{ url_for('new_recipe') }}" style="display:inline-block; margin-bottom:20px; padding:10px 20px; background:#4CAF50; color:white; border-radius:5px; text-decoration:none;">➕ New Recipe</a>
 
-<div style="display: flex; gap: 20px;">
-    <!-- Left: Recipe gallery -->
-    <div style="flex: 2;">
-        <h1>Nils's Cookbook</h1>
-        <a href="{{ url_for('new_recipe') }}" style="display:inline-block; margin-bottom:20px; padding:10px 20px; background:#4CAF50; color:white; border-radius:5px; text-decoration:none;">➕ New Recipe</a>
+            <form method="get" class="filter-container">
+                <strong>Filter by tags:</strong><br>
+                {% for tag in ['chicken', 'asian', 'swedish', 'vegetarian', 'quick', 'potato', 'meat'] %}
+                    <label class="tag-label">
+                        <input type="checkbox" name="tag" value="{{ tag }}"
+                            {% if tag in selected_tags %}checked{% endif %}>
+                        {{ tag }}
+                    </label>
+                {% endfor %}
+                <br><br>
+                <button type="submit">Apply Filters</button>
+                <a href="/" style="margin-left: 10px;">Clear</a>
+            </form>
 
-        <form method="get" class="filter-container">
-            <strong>Filter by tags:</strong><br>
-            {% for tag in ['chicken', 'asian', 'swedish', 'vegetarian', 'quick', 'potato', 'meat'] %}
-                <label class="tag-label">
-                    <input type="checkbox" name="tag" value="{{ tag }}"
-                        {% if tag in selected_tags %}checked{% endif %}>
-                    {{ tag }}
-                </label>
-            {% endfor %}
-            <br><br>
-            <button type="submit">Apply Filters</button>
-            <a href="/" style="margin-left: 10px;">Clear</a>
-        </form>
-
-        <div class="recipe-grid">
-            {% for recipe in recipes %}
-            <a href="/recipe/{{ recipe[0] }}">
-                <div class="recipe-card">
-                    <h3>{{ recipe[1] }}</h3>
-                    <div class="image-square">
-                        <img src="{{ recipe[5] or 'https://via.placeholder.com/250x150?text=No+Image' }}" alt="Image of {{ recipe[1] }}">
+            <div class="recipe-grid">
+                {% for recipe in recipes %}
+                <a href="/recipe/{{ recipe[0] }}">
+                    <div class="recipe-card">
+                        <h3>{{ recipe[1] }}</h3>
+                        <div class="image-square">
+                            <img src="{{ recipe[5] if recipe[5] else url_for('static', filename='uploads/placeholder.jpeg') }}" alt="Image of {{ recipe[1] }}">
+                        </div>
+                        <p>{{ recipe[2] }}</p>
                     </div>
-                    <p>{{ recipe[2] }}</p>
-                </div>
-            </a>
-            {% endfor %}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="sidebar">
+            {% include 'chat_widget.html' %}   
         </div>
     </div>
-
-    <!-- Right: AI chat -->
-    <div style="flex: 1; max-width: 400px;">
-        <h2>🤖 Recipe AI</h2>
-        <form id="chat-form">
-            <textarea id="chat-input" name="message" placeholder="Ask the AI something..." style="width: 100%; height: 80px;"></textarea><br>
-            <button type="submit">Send</button>
-        </form>
-        <div id="chat-output" style="margin-top: 20px; white-space: pre-wrap;"></div>
-    </div>
-</div>
-
-<script>
-document.getElementById('chat-form').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const input = document.getElementById('chat-input').value;
-    const responseDiv = document.getElementById('chat-output');
-    responseDiv.innerText = "Thinking...";
-
-    const formData = new FormData();
-    formData.append("message", input);
-
-    const response = await fetch("/chat", {
-        method: "POST",
-        body: formData
-    });
-
-    const text = await response.text();
-    responseDiv.innerText = text;
-});
-</script>
-
 </body>
 </html>

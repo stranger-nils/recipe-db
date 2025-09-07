@@ -72,36 +72,56 @@ def sql_sandbox():
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    user_input = request.form['message']
+    user_input = request.form['message'].strip()
+
+    # System prompt with persona + strict recipe format contract
+    SYSTEM_PROMPT = (
+        "You are René, an AI sous chef. "
+        "Your role is to support the user (the head chef) with professional, accurate, and encouraging culinary help. "
+        "Be concise by default; expand with steps or deeper detail when asked. "
+        "Offer small, thoughtful improvements (seasoning, technique, presentation) without being bossy. "
+        "Use a warm, confident tone; light culinary metaphors are okay. End with a supportive note when it fits.\n\n"
+        "RECIPE OUTPUT CONTRACT (IMPORTANT):\n"
+        "- If the user asks for a recipe, a variation of a recipe, or a full method for a dish, "
+        "you MUST output exactly two sections with these exact headings:\n"
+        "Ingredients:\n"
+        "Instructions:\n"
+        "- Under 'Ingredients:', list one ingredient per line in the form: "
+        "\"<amount> <unit> <ingredient>\" (no bullets). Examples: \"200 g spaghetti\", \"1 tbsp olive oil\". "
+        "If unit is not applicable, omit it: \"1 lemon\".\n"
+        "- Under 'Instructions:', provide a numbered method using Arabic numerals, like:\n"
+        "1. Step one\n"
+        "2. Step two\n"
+        "3. ...\n"
+        "- Do not include any other sections (no 'Notes', no 'Servings') unless the user explicitly asks.\n"
+        "- If the user asks only for ideas/tips (not a full recipe), answer normally without the two sections.\n"
+        "- If the user asks for partial info (e.g., only ingredients), supply only what was asked — still honoring the format where relevant.\n"
+    )
 
     # Create session history if it doesn't exist yet
     if 'chat_history' not in session:
         session['chat_history'] = [
-            {"role": "system", "content": (
-                "You are an AI recipe assistant connected to a SQLite database. "
-                "You can help users generate, modify, and insert recipes. "
-                "When asked to generate SQL, do so based on the current context in the table `recipe` (columns: id, title, description, ingredients, instructions, image_url, tags)."
-            )}
+            {"role": "system", "content": SYSTEM_PROMPT}
         ]
 
-    # Add the user's message to history
+    # Append user message
     session['chat_history'].append({"role": "user", "content": user_input})
 
-    # Send full history to OpenAI
+    # Call OpenAI
     response = client.chat.completions.create(
-        model="gpt-5",
-        messages=session['chat_history']
-    )
-
+            model="gpt-5",
+            messages=session['chat_history']
+        )
     reply = response.choices[0].message.content
 
-    # Add assistant's reply to history
+    # Append assistant reply and persist session
     session['chat_history'].append({"role": "assistant", "content": reply})
-
+    
     # Save session
     session.modified = True
 
     return reply
+
 
 
 @app.route('/recipe/<int:recipe_id>')

@@ -4,15 +4,37 @@
     <meta charset="UTF-8">
     <title>{{ recipe[1] }}</title>
     <style>
-        body { font-family: Arial; max-width: 800px; margin: 40px auto; }
+        body {
+        font-family: Arial;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        background: #f5f5f5;
+        }
+        .main-layout {
+            display: flex;
+            gap: 40px;
+            width: 100vw;
+            justify-content: center;
+            position: relative;
+        }
+        .main-content {
+            flex: 2;
+            max-width: 1000px;
+            background: #fff;
+            padding: 20px;
+            box-sizing: border-box;
+        }
         img { width: 100%; border-radius: 8px; margin-bottom: 20px; }
         .back { margin-bottom: 20px; display: block; }
         pre { white-space: pre-wrap; }
         .image-square {
-            width: 300px;           /* Set your desired square size */
+            width: 300px;        
             height: 300px;
             overflow: hidden;
-            border-radius: 8px;
+            border-radius: 4px;
             margin-bottom: 20px;
             display: flex;
             align-items: center;
@@ -22,33 +44,37 @@
         .image-square img {
             width: 100%;
             height: 100%;
-            object-fit: cover;      /* This crops and centers the image */
+            object-fit: cover;    
             object-position: center;
             display: block;
         }
     </style>
 </head>
 <body>
+<div class="main-layout">
+    <div class="main-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <a href="/" class="back">← Back to gallery</a>
+            <a href="{{ url_for('edit_recipe', recipe_id=recipe[0]) }}" style="text-decoration: none; font-size: 18px; background: #eee; padding: 8px 16px; border-radius: 5px;">✏️ Edit</a>
+        </div>
+        <h1>{{ recipe[1] }}</h1>
+        <div class="image-square">
+            <img src="{{ recipe[5] if recipe[5] else url_for('static', filename='uploads/placeholder.jpeg') }}" alt="Image of {{ recipe[1] }}">
+        </div>
+        <p><strong>Description:</strong> {{ recipe[2] }}</p>
 
-    <a href="/" class="back">← Back to gallery</a>
-    <a href="{{ url_for('edit_recipe', recipe_id=recipe[0]) }}" style="position: absolute; top: 20px; right: 40px; text-decoration: none; font-size: 18px; background: #eee; padding: 8px 16px; border-radius: 5px;">✏️ Edit</a>
+        <h2>Ingredients</h2>
+        <pre>{{ recipe[3] }}</pre>
 
-    <h1>{{ recipe[1] }}</h1>
-    <div class="image-square">
-        <img src="{{ recipe[5] or 'https://via.placeholder.com/600x300?text=No+Image' }}" alt="Image of {{ recipe[1] }}">
+        <h2>Instructions</h2>
+        <pre>{{ recipe[4] }}</pre>
+
+        <h2>Notes</h2>
+        <pre>{{ recipe[7] }}</pre>
+
+        <p><strong>Tags:</strong> {{ recipe[6] }}</p>
     </div>
-    <p><strong>Description:</strong> {{ recipe[2] }}</p>
-
-    <h2>Ingredients</h2>
-    <pre>{{ recipe[3] }}</pre>
-
-    <h2>Instructions</h2>
-    <pre>{{ recipe[4] }}</pre>
-
-    <h2>Notes</h2>
-    <pre>{{ recipe[7] }}</pre>
-
-    <p><strong>Tags:</strong> {{ recipe[6] }}</p>
-
+</div>
+{% include 'chat_widget.html' %}
 </body>
 </html>

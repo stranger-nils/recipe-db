@@ -36,7 +36,7 @@ A simple web application for storing, viewing, and editing recipes. Built with F
 - Website
 - User authentication (login/register)
 - Possible to rate recipes
-- Personal cookbooks that can be divided into sections and filtered with tags
+- Personal cookbooks that can be divided into personal sections and filtered with personal tags
 - Price estimation based on ingredients
 - Shopping list generator
 - Mobile-friendly design

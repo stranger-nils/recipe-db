@@ -1,0 +1,93 @@
+<style>
+#rene-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 400px;
+    max-width: 90vw;
+    height: 100vh;
+    background: #fafafa;
+    box-shadow: -2px 0 8px rgba(0,0,0,0.05);
+    z-index: 1000;
+    transition: transform 0.3s;
+    display: flex;
+    flex-direction: column;
+}
+#rene-sidebar.collapsed {
+    transform: translateX(100%);
+}
+#rene-toggle {
+    position: absolute;
+    left: -36px;
+    top: 20px;
+    width: 32px;
+    height: 32px;
+    border-radius: 16px 0 0 16px;
+    background: #eee;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    font-size: 1.2em;
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: -2px 0 8px rgba(0,0,0,0.05);
+}
+</style>
+<div id="rene-sidebar">
+    <button id="rene-toggle">⏩</button>
+    <div style="padding: 16px;">
+        <span style="font-size: 1.2em; font-weight: bold;">👨‍🍳 René</span>
+        <p style="color: #555; margin-top: 10px; margin-bottom: 20px;">
+            René is your friendly AI chef, ready to answer questions, suggest recipes, and help you cook delicious meals!
+        </p>
+        <div id="chat-output" style="min-height:60px; margin-bottom:10px;"></div>
+        <form id="chat-form">
+            <input id="chat-input" type="text" placeholder="Ask René anything..." style="width:70%;" required>
+            <button type="submit">Send</button>
+        </form>
+    </div>
+</div>
+<script>
+if (!window.reneChatLoaded) {
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebar = document.getElementById('rene-sidebar');
+        const toggleBtn = document.getElementById('rene-toggle');
+        let collapsed = false;
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+                collapsed = !collapsed;
+                if (collapsed) {
+                    sidebar.classList.add('collapsed');
+                    toggleBtn.innerText = '⏪';
+                } else {
+                    sidebar.classList.remove('collapsed');
+                    toggleBtn.innerText = '⏩';
+                }
+            });
+        }
+        // Chat logic
+        const chatForm = document.getElementById('chat-form');
+        if (chatForm) {
+            chatForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const input = document.getElementById('chat-input').value;
+                const responseDiv = document.getElementById('chat-output');
+                responseDiv.innerText = "Thinking...";
+
+                const formData = new FormData();
+                formData.append("message", input);
+
+                const response = await fetch("/chat", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const text = await response.text();
+                responseDiv.innerText = text;
+            });
+        }
+    });
+    window.reneChatLoaded = true;
+}
+</script>
