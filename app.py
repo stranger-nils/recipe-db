@@ -31,18 +31,32 @@ Session(app)
 def index():
     selected_tags = request.args.getlist('tag')  # Supports multiple tags via ?tag=chicken&tag=swedish
     conn = sqlite3.connect('recipe.db')
+    conn.row_factory = sqlite3.Row
     c = conn.cursor()
+    # Fetch all ingredients for the filter dropdown
+    c.execute('SELECT id, name FROM ingredient ORDER BY name')
+    all_ingredients = c.fetchall()
 
-    if selected_tags:
-        query = "SELECT * FROM recipe WHERE " + " AND ".join(["tags LIKE ?" for _ in selected_tags])
-        values = [f"%{tag}%" for tag in selected_tags]
-        c.execute(query, values)
+    # Get selected ingredient IDs from query params
+    selected_ingredients = request.args.getlist('ingredients', type=int)
+
+    # Filter recipes if ingredients are selected
+    if selected_ingredients:
+        placeholders = ','.join('?' for _ in selected_ingredients)
+        query = f'''
+            SELECT DISTINCT r.*
+            FROM recipe r
+            JOIN recipe_ingredient ri ON r.id = ri.recipe_id
+            WHERE ri.ingredient_id IN ({placeholders})
+        '''
+        c.execute(query, selected_ingredients)
+        recipes = c.fetchall()
     else:
-        c.execute("SELECT * FROM recipe")
+        c.execute('SELECT * FROM recipe')
+        recipes = c.fetchall()
 
-    recipes = c.fetchall()
     conn.close()
-    return render_template('index.html', recipes=recipes, selected_tags=selected_tags)
+    return render_template('index.html', recipes=recipes, all_ingredients=all_ingredients, selected_ingredients=selected_ingredients)
 
 
 @app.route('/sql', methods=['GET', 'POST'])
@@ -127,23 +141,31 @@ def chat():
 @app.route('/recipe/<int:recipe_id>')
 def recipe_detail(recipe_id):
     conn = sqlite3.connect('recipe.db')
+    conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    c.execute("SELECT * FROM recipe WHERE id=?", (recipe_id,))
+    # Fetch the recipe
+    c.execute('SELECT * FROM recipe WHERE id=?', (recipe_id,))
     recipe = c.fetchone()
+    # Fetch the ingredients for this recipe
+    c.execute('''
+        SELECT i.name, ri.amount, ri.unit, ri.note
+        FROM recipe_ingredient ri
+        JOIN ingredient i ON ri.ingredient_id = i.id
+        WHERE ri.recipe_id = ?
+    ''', (recipe_id,))
+    ingredients = c.fetchall()
     conn.close()
-    if recipe:
-        return render_template('recipe_detail.html', recipe=recipe)
-    else:
-        return "Recipe not found", 404
+    return render_template('recipe_detail.html', recipe=recipe, ingredients=ingredients)
 
 @app.route('/recipe/<int:recipe_id>/edit', methods=['GET', 'POST'])
 def edit_recipe(recipe_id):
     conn = sqlite3.connect('recipe.db')
+    conn.row_factory = sqlite3.Row
     c = conn.cursor()
     if request.method == 'POST':
         title = request.form['title']
         description = request.form['description']
-        ingredients = request.form['ingredients']
+        ingredients_text = request.form['ingredients']
         instructions = request.form['instructions']
         notes = request.form['notes']
         tags = request.form['tags']
@@ -160,31 +182,75 @@ def edit_recipe(recipe_id):
             file.save(filepath)
             image_url = '/' + filepath.replace('\\', '/')
         else:
-            image_url = current_image_url  # Keep the old image if no new file is uploaded
+            image_url = current_image_url
 
         c.execute('''
             UPDATE recipe
-            SET title=?, description=?, ingredients=?, instructions=?, notes=?, image_url=?, tags=?
+            SET title=?, description=?, instructions=?, notes=?, image_url=?, tags=?
             WHERE id=?
-        ''', (title, description, ingredients, instructions, notes, image_url, tags, recipe_id))
+        ''', (title, description, instructions, notes, image_url, tags, recipe_id))
+
+        # Remove old ingredients for this recipe
+        c.execute("DELETE FROM recipe_ingredient WHERE recipe_id=?", (recipe_id,))
+
+        # Parse and insert new ingredients
+        for line in ingredients_text.strip().split('\n'):
+            parts = line.strip().split(' ', 2)
+            if len(parts) == 3:
+                amount, unit, name = parts
+            elif len(parts) == 2:
+                amount, unit = parts
+                name = ''
+            elif len(parts) == 1:
+                amount = parts[0]
+                unit = ''
+                name = ''
+            else:
+                continue
+            c.execute("INSERT OR IGNORE INTO ingredient (name) VALUES (?)", (name,))
+            c.execute("SELECT id FROM ingredient WHERE name=?", (name,))
+            ingredient_id = c.fetchone()[0]
+            c.execute('''
+                INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, unit, note)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (recipe_id, ingredient_id, amount, unit, ''))
+
         conn.commit()
         conn.close()
         return redirect(url_for('recipe_detail', recipe_id=recipe_id))
     else:
         c.execute("SELECT * FROM recipe WHERE id=?", (recipe_id,))
         recipe = c.fetchone()
-        conn.close()
-        if recipe:
-            return render_template('edit_recipe.html', recipe=recipe)
-        else:
-            return "Recipe not found", 404
+
+        # Fetch ingredients for this recipe
+        c.execute('''
+            SELECT i.name, ri.amount, ri.unit, ri.note
+            FROM recipe_ingredient ri
+            JOIN ingredient i ON ri.ingredient_id = i.id
+            WHERE ri.recipe_id = ?
+        ''', (recipe_id,))
+        ingredients = c.fetchall()
+
+        # Prepare a string for the textarea (e.g., "2 tbsp olive oil\n1 onion")
+        ingredients_text = "\n".join(
+            f"{ing['amount']} {ing['unit']} {ing['name']}".strip()
+            for ing in ingredients
+        )
+
+        # Pass ingredients_text to the template
+        return render_template(
+            'edit_recipe.html',
+            recipe=recipe,
+            ingredients_text=ingredients_text,
+            is_new=False
+        )
 
 @app.route('/recipe/new/edit', methods=['GET', 'POST'])
 def new_recipe():
     if request.method == 'POST':
         title = request.form['title']
         description = request.form['description']
-        ingredients = request.form['ingredients']
+        ingredients_text = request.form['ingredients']
         instructions = request.form['instructions']
         notes = request.form['notes']
         tags = request.form['tags']
@@ -198,20 +264,57 @@ def new_recipe():
             image_url = '/' + filepath.replace('\\', '/')
 
         conn = sqlite3.connect('recipe.db')
+        conn.row_factory = sqlite3.Row
         c = conn.cursor()
+        # Insert recipe
         c.execute('''
-            INSERT INTO recipe (title, description, ingredients, instructions, notes, image_url, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (title, description, ingredients, instructions, notes, image_url, tags))
+            INSERT INTO recipe (title, description, instructions, notes, image_url, tags)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (title, description, instructions, notes, image_url, tags))
         recipe_id = c.lastrowid
+
+        # Parse and insert ingredients
+        for line in ingredients_text.strip().split('\n'):
+            parts = line.strip().split(' ', 2)
+            if len(parts) == 3:
+                amount, unit, name = parts
+            elif len(parts) == 2:
+                amount, unit = parts
+                name = ''
+            elif len(parts) == 1:
+                amount = parts[0]
+                unit = ''
+                name = ''
+            else:
+                continue
+            # Insert ingredient if not exists
+            c.execute("INSERT OR IGNORE INTO ingredient (name) VALUES (?)", (name,))
+            c.execute("SELECT id FROM ingredient WHERE name=?", (name,))
+            ingredient_id = c.fetchone()[0]
+            # Insert into recipe_ingredient
+            c.execute('''
+                INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, unit, note)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (recipe_id, ingredient_id, amount, unit, ''))
+
         conn.commit()
         conn.close()
         return redirect(url_for('recipe_detail', recipe_id=recipe_id))
     else:
-        # Empty recipe for the form
         empty_recipe = [None, '', '', '', '', '', '', '']
         return render_template('edit_recipe.html', recipe=empty_recipe, is_new=True)
 
+@app.route('/recipe/<int:recipe_id>/delete', methods=['POST'])
+def delete_recipe(recipe_id):
+    conn = sqlite3.connect('recipe.db')
+    c = conn.cursor()
+    # Delete from recipe_ingredient first (to avoid foreign key constraint issues)
+    c.execute('DELETE FROM recipe_ingredient WHERE recipe_id=?', (recipe_id,))
+    # Delete the recipe itself
+    c.execute('DELETE FROM recipe WHERE id=?', (recipe_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(debug=True)

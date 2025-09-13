@@ -42,22 +42,22 @@
                     <input type="text" name="title" value="{{ recipe[1] }}" required>
                 </label>
                 <label>Description:
-                    <textarea name="description" required>{{ recipe[2] }}</textarea>
+                    <textarea name="description" required>{{ recipe['description'] }}</textarea>
                 </label>
                 <label>Ingredients:
-                    <textarea name="ingredients" required>{{ recipe[3] }}</textarea>
+                    <textarea name="ingredients" required>{{ ingredients_text }}</textarea>
                 </label>
                 <label>Instructions:
-                    <textarea name="instructions" required>{{ recipe[4] }}</textarea>
+                    <textarea name="instructions" required>{{ recipe['instructions'] }}</textarea>
                 </label>
                 <label>Notes:
-                    <textarea name="notes">{{ recipe[7] }}</textarea>
+                    <textarea name="notes">{{ recipe['notes'] }}</textarea>
                 </label>
                 <label>Upload Image:
                     <input type="file" name="image_file" accept="image/*">
                 </label>
                 <label>Tags:
-                    <input type="text" name="tags" value="{{ recipe[6] }}">
+                    <input type="text" name="tags" value="{{ recipe['tags'] }}">
                 </label>
                 <div class="actions">
                     <button type="submit">Save</button>
