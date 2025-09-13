@@ -117,7 +117,30 @@
                 </script>
                 <button type="submit">Filter</button>
             </form>
-
+            <div style="margin-top: 20px;">
+                <button type="button" id="toggle-advanced-search" style="margin-bottom: 10px;">
+                    Advanced Search
+                </button>
+                <div id="advanced-search-box" style="display: none; border: 1px solid #ccc; padding: 16px; border-radius: 8px; background: #fafafa;">
+                    <form method="post" action="{{ url_for('index') }}">
+                        <label for="sql_query"><strong>Custom SQL Query:</strong></label><br>
+                        <textarea id="sql_query" name="sql_query" rows="8" style="width: 100%;">{{ advanced_sql or default_sql_query }}</textarea>
+                        <button type="submit">Run Query</button>
+                    </form>
+                    {% if error %}
+                        <p style="color: red;">{{ error }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const btn = document.getElementById('toggle-advanced-search');
+                const box = document.getElementById('advanced-search-box');
+                btn.addEventListener('click', function() {
+                    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+                });
+            });
+            </script>
             <div class="recipe-grid">
                 {% for recipe in recipes %}
                 <a href="/recipe/{{ recipe[0] }}">

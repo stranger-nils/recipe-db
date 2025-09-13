@@ -26,37 +26,69 @@ def allowed_file(filename):
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
 
+default_sql_query = (
+    "SELECT DISTINCT\n"
+    "    recipe_id,\n"
+    "    title,\n"
+    "    description,\n"
+    "    instructions,\n"
+    "    notes,\n"
+    "    image_url,\n"
+    "    tags\n"
+    "FROM recipe_with_ingredients\n"
+    "WHERE 1=1\n"
+    "    -- AND ingredient_name = ...\n"
+)
 
-@app.route('/')
+
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    selected_tags = request.args.getlist('tag')  # Supports multiple tags via ?tag=chicken&tag=swedish
     conn = sqlite3.connect('recipe.db')
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
+
     # Fetch all ingredients for the filter dropdown
     c.execute('SELECT id, name FROM ingredient ORDER BY name')
     all_ingredients = c.fetchall()
 
-    # Get selected ingredient IDs from query params
     selected_ingredients = request.args.getlist('ingredients', type=int)
+    advanced_sql = None
+    recipes = []
+    error = None
 
-    # Filter recipes if ingredients are selected
-    if selected_ingredients:
-        placeholders = ','.join('?' for _ in selected_ingredients)
-        query = f'''
-            SELECT DISTINCT r.*
-            FROM recipe r
-            JOIN recipe_ingredient ri ON r.id = ri.recipe_id
-            WHERE ri.ingredient_id IN ({placeholders})
-        '''
-        c.execute(query, selected_ingredients)
-        recipes = c.fetchall()
+    if request.method == 'POST' and 'sql_query' in request.form:
+        advanced_sql = request.form['sql_query']
+        try:
+            c.execute(advanced_sql)
+            recipes = c.fetchall()
+        except Exception as e:
+            error = str(e)
+            recipes = []
     else:
-        c.execute('SELECT * FROM recipe')
-        recipes = c.fetchall()
+        if selected_ingredients:
+            placeholders = ','.join('?' for _ in selected_ingredients)
+            query = f'''
+                SELECT DISTINCT r.*
+                FROM recipe r
+                JOIN recipe_ingredient ri ON r.id = ri.recipe_id
+                WHERE ri.ingredient_id IN ({placeholders})
+            '''
+            c.execute(query, selected_ingredients)
+            recipes = c.fetchall()
+        else:
+            c.execute('SELECT * FROM recipe')
+            recipes = c.fetchall()
 
     conn.close()
-    return render_template('index.html', recipes=recipes, all_ingredients=all_ingredients, selected_ingredients=selected_ingredients)
+    return render_template(
+        'index.html',
+        recipes=recipes,
+        all_ingredients=all_ingredients,
+        selected_ingredients=selected_ingredients,
+        advanced_sql=advanced_sql,
+        error=error,
+        default_sql_query=default_sql_query
+    )
 
 
 @app.route('/sql', methods=['GET', 'POST'])
@@ -82,7 +114,6 @@ def sql_sandbox():
             error = str(e)
 
     return render_template('sql.html', result=result, error=error, query=query)
-
 
 @app.route('/chat', methods=['POST'])
 def chat():
