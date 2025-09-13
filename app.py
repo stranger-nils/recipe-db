@@ -347,5 +347,75 @@ def delete_recipe(recipe_id):
     conn.close()
     return redirect(url_for('index'))
 
+@app.route('/add_to_shopping_list/<int:recipe_id>', methods=['POST'])
+def add_to_shopping_list(recipe_id):
+    shopping_list = session.get('shopping_list', {})
+    shopping_list[str(recipe_id)] = shopping_list.get(str(recipe_id), 0) + 1
+    session['shopping_list'] = shopping_list
+    return redirect(url_for('shopping_list'))
+
+@app.route('/shopping_list', methods=['GET', 'POST'])
+def shopping_list():
+    conn = sqlite3.connect('recipe.db')
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    shopping_list = session.get('shopping_list', {})
+    recipes = []
+    ingredients_map = {}
+
+    # Fetch recipes and their ingredients
+    for recipe_id, qty in shopping_list.items():
+        c.execute('SELECT * FROM recipe WHERE id=?', (recipe_id,))
+        recipe = c.fetchone()
+        if recipe:
+            recipes.append({'recipe': recipe, 'qty': qty})
+
+            # Fetch ingredients for this recipe
+            c.execute('''
+                SELECT i.name, ri.amount, ri.unit
+                FROM recipe_ingredient ri
+                JOIN ingredient i ON ri.ingredient_id = i.id
+                WHERE ri.recipe_id = ?
+            ''', (recipe_id,))
+            for ing in c.fetchall():
+                key = (ing['name'], ing['unit'])
+                # Try to sum amounts as floats, fallback to string concat if not possible
+                try:
+                    amt = float(ing['amount']) * qty
+                except:
+                    amt = f"{ing['amount']} x {qty}"
+                if key in ingredients_map:
+                    try:
+                        ingredients_map[key] += amt
+                    except:
+                        ingredients_map[key] = f"{ingredients_map[key]}, {amt}"
+                else:
+                    ingredients_map[key] = amt
+
+    conn.close()
+    return render_template('shopping_list.html', recipes=recipes, ingredients_map=ingredients_map)
+
+@app.route('/update_shopping_list/<int:recipe_id>/<action>', methods=['POST'])
+def update_shopping_list(recipe_id, action):
+    shopping_list = session.get('shopping_list', {})
+    rid = str(recipe_id)
+    if rid in shopping_list:
+        if action == 'increase':
+            shopping_list[rid] += 1
+        elif action == 'decrease':
+            shopping_list[rid] = max(1, shopping_list[rid] - 1)
+    session['shopping_list'] = shopping_list
+    return redirect(url_for('shopping_list'))
+
+@app.route('/remove_from_shopping_list/<int:recipe_id>', methods=['POST'])
+def remove_from_shopping_list(recipe_id):
+    shopping_list = session.get('shopping_list', {})
+    rid = str(recipe_id)
+    if rid in shopping_list:
+        del shopping_list[rid]
+    session['shopping_list'] = shopping_list
+    return redirect(url_for('shopping_list'))
+
+
 if __name__ == '__main__':
     app.run(debug=True)

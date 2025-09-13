@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Shopping List</title>
+</head>
+<body>
+    <p><a href="{{ url_for('index') }}">← Back to gallery</a></p>
+    <h1>Shopping List</h1>
+    <h2>Selected Recipes</h2>
+    <ul>
+        {% for item in recipes %}
+        <li>
+            {{ item.recipe['title'] }} (x{{ item.qty }})
+            <form action="{{ url_for('update_shopping_list', recipe_id=item.recipe['id'], action='increase') }}" method="post" style="display:inline;">
+                <button type="submit">+</button>
+            </form>
+            <form action="{{ url_for('update_shopping_list', recipe_id=item.recipe['id'], action='decrease') }}" method="post" style="display:inline;">
+                <button type="submit">-</button>
+            </form>
+            <form action="{{ url_for('remove_from_shopping_list', recipe_id=item.recipe['id']) }}" method="post" style="display:inline;">
+                <button type="submit">Remove</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+    <h2>Shopping List</h2>
+    <table border="1" cellpadding="4" id="shopping-table">
+        <tr>
+            <th>Ingredient</th>
+            <th>Amount</th>
+            <th>Unit</th>
+            <th>Got it?</th>
+        </tr>
+        {% for (name, unit), amount in ingredients_map.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            <td>{{ amount }}</td>
+            <td>{{ unit }}</td>
+            <td style="text-align: center;">
+                <input type="checkbox" class="got-checkbox">
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.got-checkbox').forEach(function(checkbox) {
+            checkbox.addEventListener('change', function() {
+                if (checkbox.checked) {
+                    checkbox.closest('tr').style.backgroundColor = '#d4f7d4';
+                } else {
+                    checkbox.closest('tr').style.backgroundColor = '';
+                }
+            });
+        });
+    });
+    </script>
+</body>
+</html>
