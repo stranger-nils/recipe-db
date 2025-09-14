@@ -22,7 +22,10 @@ c.execute('DROP TABLE IF EXISTS ingredient')
 c.execute('''
 CREATE TABLE ingredient (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE
+    name TEXT UNIQUE,
+    "group" TEXT,
+    notes TEXT,
+    kitchen_staple INTEGER DEFAULT 0
 )
 ''')
 

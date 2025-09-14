@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ingredient Library</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 8px; }
+        th { background: #f5f5f5; }
+        input[type="text"] { width: 100%; }
+    </style>
+</head>
+<body>
+    <h1>Ingredient Library</h1>
+    <form method="post">
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Grocery Category</th>
+                <th>Notes</th>
+                <th>Recipe IDs</th>
+                <th>Kitchen Staple</th>
+            </tr>
+            {% for ing in ingredients %}
+            <tr>
+                <td>{{ ing['name'] }}</td>
+                <td>
+                    <input type="text" name="grocery_category_{{ ing['id'] }}" value="{{ ing['grocery_category'] or '' }}">
+                </td>
+                <td>
+                    <input type="text" name="notes_{{ ing['id'] }}" value="{{ ing['notes'] or '' }}">
+                </td>
+                <td>
+                    {{ ingredient_recipes[ing['id']] }}
+                </td>
+                <td style="text-align: center;">
+                    <input type="checkbox" name="kitchen_staple_{{ ing['id'] }}" {% if ing['kitchen_staple'] %}checked{% endif %}>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        <button type="submit">Save Changes</button>
+    </form>
+    <p><a href="{{ url_for('index') }}">← Back to gallery</a></p>
+</body>
+</html>

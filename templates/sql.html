@@ -1,27 +1,49 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>SQL Sandbox</title>
     <style>
         textarea { width: 100%; height: 150px; }
         pre { background: #f0f0f0; padding: 10px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 6px; }
+        th { background: #f5f5f5; }
     </style>
 </head>
 <body>
     <h1>🧪 SQL Sandbox</h1>
     <form method="post">
-        <label for="query">Skriv din SQL-query:</label><br>
+        <label for="query"><strong>Enter your SQL query:</strong></label><br>
         <textarea name="query" id="query">{{ query }}</textarea><br><br>
-        <button type="submit">Kör</button>
+        <button type="submit">Run</button>
     </form>
 
     {% if error %}
-        <h3 style="color: red;">Fel:</h3>
-        <pre>{{ error }}</pre>
+    <h3 style="color: red;">Error:</h3>
+    <pre>{{ error }}</pre>
     {% elif result %}
-        <h3>Resultat:</h3>
-        <pre>{{ result }}</pre>
+        <h3>Result:</h3>
+        <table>
+            {% if columns %}
+                <tr>
+                    {% for col in columns %}
+                        <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+                {% for row in result %}
+                    <tr>
+                        {% for col in columns %}
+                            <td>{{ row[col] }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td>{{ result[0] }}</td>
+                </tr>
+            {% endif %}
+        </table>
     {% endif %}
 </body>
 </html>

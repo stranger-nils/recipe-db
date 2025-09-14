@@ -25,22 +25,29 @@
         {% endfor %}
     </ul>
     <h2>Shopping List</h2>
-    <table border="1" cellpadding="4" id="shopping-table">
+    <table border="1" cellpadding="4" id="shopping-table" style="width:100%;">
         <tr>
             <th>Ingredient</th>
+            <th>Grocery Category</th>
             <th>Amount</th>
             <th>Unit</th>
             <th>Got it?</th>
         </tr>
-        {% for (name, unit), amount in ingredients_map.items() %}
-        <tr>
-            <td>{{ name }}</td>
-            <td>{{ amount }}</td>
-            <td>{{ unit }}</td>
-            <td style="text-align: center;">
-                <input type="checkbox" class="got-checkbox">
-            </td>
-        </tr>
+        {% set last_staple = None %}
+        {% for (name, unit, grocery_category, kitchen_staple), amount in sorted_items %}
+            {% if last_staple is not none and last_staple != kitchen_staple %}
+                <tr><td colspan="5" style="border-top: 5px solid #333;"></td></tr>
+            {% endif %}
+            <tr>
+                <td>{{ name }}</td>
+                <td>{{ grocery_category or '' }}</td>
+                <td>{{ amount }}</td>
+                <td>{{ unit }}</td>
+                <td style="text-align: center;">
+                    <input type="checkbox" class="got-checkbox" {% if kitchen_staple %}checked{% endif %}>
+                </td>
+            </tr>
+            {% set last_staple = kitchen_staple %}
         {% endfor %}
     </table>
     <script>
@@ -53,6 +60,10 @@
                     checkbox.closest('tr').style.backgroundColor = '';
                 }
             });
+            // Pre-check coloring for kitchen staples
+            if (checkbox.checked) {
+                checkbox.closest('tr').style.backgroundColor = '#d4f7d4';
+            }
         });
     });
     </script>

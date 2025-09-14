@@ -93,27 +93,34 @@ def index():
 
 @app.route('/sql', methods=['GET', 'POST'])
 def sql_sandbox():
-    result = ''
+    result = []
     error = ''
     query = ''
+    columns = []
     if request.method == 'POST':
         query = request.form['query']
         try:
             conn = sqlite3.connect('recipe.db')
+            conn.row_factory = sqlite3.Row
             c = conn.cursor()
-            c.execute(query)
 
+            c.execute(query)
             if query.strip().lower().startswith("select"):
-                result = c.fetchall()
+                rows = c.fetchall()
+                result = [dict(row) for row in rows]
+                columns = rows[0].keys() if rows else []
             else:
                 conn.commit()
-                result = "Query executed successfully."
+                result = [{"Message": "Query executed successfully."}]
+                columns = ["Message"]
 
             conn.close()
         except Exception as e:
             error = str(e)
+            result = []
+            columns = []
 
-    return render_template('sql.html', result=result, error=error, query=query)
+    return render_template('sql.html', result=result, error=error, query=query, columns=columns)
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -318,8 +325,11 @@ def new_recipe():
                 name = ''
             else:
                 continue
-            # Insert ingredient if not exists
-            c.execute("INSERT OR IGNORE INTO ingredient (name) VALUES (?)", (name,))
+            # Insert ingredient if not exists, always set grocery_category and notes to empty string if new
+            c.execute(
+                "INSERT OR IGNORE INTO ingredient (name, grocery_category, notes) VALUES (?, ?, ?)",
+                (name, '', '')
+            )
             c.execute("SELECT id FROM ingredient WHERE name=?", (name,))
             ingredient_id = c.fetchone()[0]
             # Insert into recipe_ingredient
@@ -363,23 +373,21 @@ def shopping_list():
     recipes = []
     ingredients_map = {}
 
-    # Fetch recipes and their ingredients
     for recipe_id, qty in shopping_list.items():
         c.execute('SELECT * FROM recipe WHERE id=?', (recipe_id,))
         recipe = c.fetchone()
         if recipe:
             recipes.append({'recipe': recipe, 'qty': qty})
 
-            # Fetch ingredients for this recipe
+            # Fetch ingredients for this recipe, including grocery_category and kitchen_staple
             c.execute('''
-                SELECT i.name, ri.amount, ri.unit
+                SELECT i.name, ri.amount, ri.unit, i.grocery_category, i.kitchen_staple
                 FROM recipe_ingredient ri
                 JOIN ingredient i ON ri.ingredient_id = i.id
                 WHERE ri.recipe_id = ?
             ''', (recipe_id,))
             for ing in c.fetchall():
-                key = (ing['name'], ing['unit'])
-                # Try to sum amounts as floats, fallback to string concat if not possible
+                key = (ing['name'], ing['unit'], ing['grocery_category'], ing['kitchen_staple'])
                 try:
                     amt = float(ing['amount']) * qty
                 except:
@@ -392,8 +400,18 @@ def shopping_list():
                 else:
                     ingredients_map[key] = amt
 
+    # Convert ingredients_map to a list of tuples for sorting
+    sorted_items = sorted(
+        ingredients_map.items(),
+        key=lambda item: (
+            not item[0][3],                # kitchen_staple: True first
+            item[0][2] or '',              # grocery_category (was group)
+            item[0][0]                     # name
+        )
+    )
+
     conn.close()
-    return render_template('shopping_list.html', recipes=recipes, ingredients_map=ingredients_map)
+    return render_template('shopping_list.html', recipes=recipes, sorted_items=sorted_items)
 
 @app.route('/update_shopping_list/<int:recipe_id>/<action>', methods=['POST'])
 def update_shopping_list(recipe_id, action):
@@ -416,6 +434,49 @@ def remove_from_shopping_list(recipe_id):
     session['shopping_list'] = shopping_list
     return redirect(url_for('shopping_list'))
 
+@app.route('/ingredient_library', methods=['GET', 'POST'])
+def ingredient_library():
+    conn = sqlite3.connect('recipe.db')
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        # Fetch all ingredient IDs in the table
+        c.execute('''
+            SELECT DISTINCT i.id
+            FROM ingredient i
+            JOIN recipe_ingredient ri ON i.id = ri.ingredient_id
+        ''')
+        ingredient_ids = [row['id'] for row in c.fetchall()]
+
+        for ing_id in ingredient_ids:
+            grocery_category = request.form.get(f'grocery_category_{ing_id}', '')
+            notes = request.form.get(f'notes_{ing_id}', '')
+            kitchen_staple = 1 if request.form.get(f'kitchen_staple_{ing_id}') == 'on' else 0
+            c.execute(
+                'UPDATE ingredient SET grocery_category=?, notes=?, kitchen_staple=? WHERE id=?',
+                (grocery_category, notes, kitchen_staple, ing_id)
+            )
+        conn.commit()
+
+    # Fetch all ingredients used in any recipe
+    c.execute('''
+        SELECT DISTINCT i.*
+        FROM ingredient i
+        JOIN recipe_ingredient ri ON i.id = ri.ingredient_id
+        ORDER BY i.name
+    ''')
+    ingredients = c.fetchall()
+
+    # For each ingredient, fetch the recipe IDs where it's used
+    ingredient_recipes = {}
+    for ing in ingredients:
+        c.execute('SELECT recipe_id FROM recipe_ingredient WHERE ingredient_id=?', (ing['id'],))
+        recipe_ids = [str(row['recipe_id']) for row in c.fetchall()]
+        ingredient_recipes[ing['id']] = ', '.join(recipe_ids)
+
+    conn.close()
+    return render_template('ingredient_library.html', ingredients=ingredients, ingredient_recipes=ingredient_recipes)
 
 if __name__ == '__main__':
     app.run(debug=True)
