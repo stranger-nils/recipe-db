@@ -3,8 +3,9 @@ from openai import OpenAI
 import os
 from flask import Flask, request, render_template, session, redirect, url_for
 from flask_session import Session
-from libsql_client.sync import create_client
+from libsql_client import create_client
 from werkzeug.utils import secure_filename
+import asyncio
 
 load_dotenv()
 
@@ -26,7 +27,7 @@ def get_db():
     db_url = os.getenv("TURSO_DB_URL")
     db_auth_token = os.getenv("TURSO_DB_AUTH_TOKEN")
     conn_str = f"{db_url}?authToken={db_auth_token}"
-    return create_client(conn_str)
+    return asyncio.run(create_client(conn_str))
 
 # Use server-side session storage
 app.config['SESSION_TYPE'] = 'filesystem'
