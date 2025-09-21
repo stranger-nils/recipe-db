@@ -2,5 +2,5 @@ Flask
 Flask-Session
 python-dotenv
 openai
-libsql-client
+libsql-client>=0.4.0
 werkzeug
