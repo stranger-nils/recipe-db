@@ -24,12 +24,16 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def get_engine():
-    db_url = os.getenv("TURSO_DB_URL")
-    db_auth_token = os.getenv("TURSO_DB_AUTH_TOKEN")
-    conn_str = f"{db_url}?authToken={db_auth_token}"
-    return create_engine(conn_str, future=True)
+TURSO_DB_URL = os.environ["TURSO_DB_URL"]
+TURSO_DB_AUTH_TOKEN = os.environ["TURSO_DB_AUTH_TOKEN"]
 
+# Create a single, global engine at startup
+engine = create_engine(
+    f"sqlite+{TURSO_DB_URL}?secure=true",
+    connect_args={"auth_token": TURSO_DB_AUTH_TOKEN},
+    pool_pre_ping=True,
+    future=True,
+)
 # Use server-side session storage
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
@@ -50,7 +54,7 @@ default_sql_query = (
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    engine = get_engine()
+    
     with engine.connect() as conn:
         # Fetch all ingredients for the filter dropdown
         all_ingredients = conn.execute(text('SELECT id, name FROM ingredient ORDER BY name')).mappings().all()
@@ -98,7 +102,7 @@ def sql_sandbox():
     error = ''
     query = ''
     columns = []
-    engine = get_engine()
+    
     if request.method == 'POST':
         query = request.form['query']
         try:
@@ -164,7 +168,7 @@ def chat():
 
 @app.route('/recipe/<int:recipe_id>')
 def recipe_detail(recipe_id):
-    engine = get_engine()
+    
     with engine.connect() as conn:
         recipe = conn.execute(text('SELECT * FROM recipe WHERE id=:id'), {'id': recipe_id}).mappings().first()
         ingredients = conn.execute(text('''
@@ -177,7 +181,7 @@ def recipe_detail(recipe_id):
 
 @app.route('/recipe/<int:recipe_id>/edit', methods=['GET', 'POST'])
 def edit_recipe(recipe_id):
-    engine = get_engine()
+    
     with engine.begin() as conn:
         if request.method == 'POST':
             title = request.form['title']
@@ -256,7 +260,7 @@ def edit_recipe(recipe_id):
 
 @app.route('/recipe/new/edit', methods=['GET', 'POST'])
 def new_recipe():
-    engine = get_engine()
+    
     if request.method == 'POST':
         title = request.form['title']
         description = request.form['description']
@@ -316,7 +320,7 @@ def new_recipe():
 
 @app.route('/recipe/<int:recipe_id>/delete', methods=['POST'])
 def delete_recipe(recipe_id):
-    engine = get_engine()
+    
     with engine.begin() as conn:
         conn.execute(text('DELETE FROM recipe_ingredient WHERE recipe_id=:id'), {'id': recipe_id})
         conn.execute(text('DELETE FROM recipe WHERE id=:id'), {'id': recipe_id})
@@ -331,7 +335,7 @@ def add_to_shopping_list(recipe_id):
 
 @app.route('/shopping_list', methods=['GET', 'POST'])
 def shopping_list():
-    engine = get_engine()
+    
     shopping_list = session.get('shopping_list', {})
     recipes = []
     ingredients_map = {}
@@ -396,7 +400,7 @@ def remove_from_shopping_list(recipe_id):
 
 @app.route('/ingredient_library', methods=['GET', 'POST'])
 def ingredient_library():
-    engine = get_engine()
+    
     with engine.begin() as conn:
         if request.method == 'POST':
             ingredient_ids = [
