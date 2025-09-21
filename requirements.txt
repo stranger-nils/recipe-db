@@ -2,6 +2,7 @@ Flask
 Flask-Session
 python-dotenv
 openai
-libsql-client
 gunicorn
 werkzeug
+sqlalchemy>=2
+sqlalchemy-libsql
