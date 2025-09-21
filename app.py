@@ -4,6 +4,7 @@ import os
 from flask import Flask, request, render_template, session, redirect, url_for
 from flask_session import Session
 import sqlite3
+from libsql_client import create_client
 from werkzeug.utils import secure_filename
 
 load_dotenv()
@@ -21,6 +22,11 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_db():
+    db_url = os.getenv("TURSO_DB_URL")
+    db_auth_token = os.getenv("TURSO_DB_AUTH_TOKEN")
+    return create_client(db_url, db_auth_token)
 
 # Use server-side session storage
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -43,8 +49,7 @@ default_sql_query = (
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    conn = sqlite3.connect('recipe.db')
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     c = conn.cursor()
 
     # Fetch all ingredients for the filter dropdown
@@ -100,8 +105,8 @@ def sql_sandbox():
     if request.method == 'POST':
         query = request.form['query']
         try:
-            conn = sqlite3.connect('recipe.db')
-            conn.row_factory = sqlite3.Row
+            conn = get_db()
+            
             c = conn.cursor()
 
             c.execute(query)
@@ -178,8 +183,8 @@ def chat():
 
 @app.route('/recipe/<int:recipe_id>')
 def recipe_detail(recipe_id):
-    conn = sqlite3.connect('recipe.db')
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
+    
     c = conn.cursor()
     # Fetch the recipe
     c.execute('SELECT * FROM recipe WHERE id=?', (recipe_id,))
@@ -197,8 +202,8 @@ def recipe_detail(recipe_id):
 
 @app.route('/recipe/<int:recipe_id>/edit', methods=['GET', 'POST'])
 def edit_recipe(recipe_id):
-    conn = sqlite3.connect('recipe.db')
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
+    
     c = conn.cursor()
     if request.method == 'POST':
         title = request.form['title']
@@ -301,8 +306,8 @@ def new_recipe():
             file.save(filepath)
             image_url = '/' + filepath.replace('\\', '/')
 
-        conn = sqlite3.connect('recipe.db')
-        conn.row_factory = sqlite3.Row
+        conn = get_db()
+        
         c = conn.cursor()
         # Insert recipe
         c.execute('''
@@ -347,7 +352,7 @@ def new_recipe():
 
 @app.route('/recipe/<int:recipe_id>/delete', methods=['POST'])
 def delete_recipe(recipe_id):
-    conn = sqlite3.connect('recipe.db')
+    conn = get_db()
     c = conn.cursor()
     # Delete from recipe_ingredient first (to avoid foreign key constraint issues)
     c.execute('DELETE FROM recipe_ingredient WHERE recipe_id=?', (recipe_id,))
@@ -366,8 +371,8 @@ def add_to_shopping_list(recipe_id):
 
 @app.route('/shopping_list', methods=['GET', 'POST'])
 def shopping_list():
-    conn = sqlite3.connect('recipe.db')
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
+    
     c = conn.cursor()
     shopping_list = session.get('shopping_list', {})
     recipes = []
@@ -436,8 +441,8 @@ def remove_from_shopping_list(recipe_id):
 
 @app.route('/ingredient_library', methods=['GET', 'POST'])
 def ingredient_library():
-    conn = sqlite3.connect('recipe.db')
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
+    
     c = conn.cursor()
 
     if request.method == 'POST':
@@ -479,4 +484,4 @@ def ingredient_library():
     return render_template('ingredient_library.html', ingredients=ingredients, ingredient_recipes=ingredient_recipes)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)

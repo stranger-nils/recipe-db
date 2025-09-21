@@ -1,0 +1,6 @@
+Flask
+Flask-Session
+python-dotenv
+openai
+libsql-client
+werkzeug
