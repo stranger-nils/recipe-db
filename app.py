@@ -3,8 +3,7 @@ from openai import OpenAI
 import os
 from flask import Flask, request, render_template, session, redirect, url_for
 from flask_session import Session
-import sqlite3
-from libsql_client import create_client
+from libsql_client.sync import create_client
 from werkzeug.utils import secure_filename
 
 load_dotenv()
