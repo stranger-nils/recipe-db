@@ -26,7 +26,8 @@ def allowed_file(filename):
 def get_db():
     db_url = os.getenv("TURSO_DB_URL")
     db_auth_token = os.getenv("TURSO_DB_AUTH_TOKEN")
-    return create_client(db_url, db_auth_token)
+    conn_str = f"{db_url}?authToken={db_auth_token}"
+    return create_client(conn_str)
 
 # Use server-side session storage
 app.config['SESSION_TYPE'] = 'filesystem'
