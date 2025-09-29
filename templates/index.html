@@ -144,13 +144,13 @@
             </script>
             <div class="recipe-grid">
                 {% for recipe in recipes %}
-                <a href="/recipe/{{ recipe[0] }}">
+                <a href="/recipe/{{ recipe['id'] }}">
                     <div class="recipe-card">
-                        <h3>{{ recipe[1] }}</h3>
+                        <h3>{{ recipe['title'] }}</h3>
                         <div class="image-square">
-                            <img src="{{ recipe[5] if recipe[5] else url_for('static', filename='uploads/placeholder.jpeg') }}" alt="Image of {{ recipe[1] }}">
+                            <img src="{{ recipe['image_url'] if recipe['image_url'] else url_for('static', filename='uploads/placeholder.jpeg') }}" alt="Image of {{ recipe['title'] }}">
                         </div>
-                        <p>{{ recipe[2] }}</p>
+                        <p>{{ recipe['description'] }}</p>
                     </div>
                 </a>
                 {% endfor %}
