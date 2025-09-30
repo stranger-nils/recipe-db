@@ -13,3 +13,6 @@ services:
         sync: false
       - key: FLASK_SECRET_KEY
         sync: false
+    previews:
+      generateOnPullRequest: true
+    
