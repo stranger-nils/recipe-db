@@ -144,15 +144,14 @@
             </script>
             <div class="recipe-grid">
                 {% for recipe in recipes %}
-                <a href="/recipe/{{ recipe['id'] }}">
                     <div class="recipe-card">
-                        <h3>{{ recipe['title'] }}</h3>
-                        <div class="image-square">
-                            <img src="{{ recipe['image_url'] if recipe['image_url'] else url_for('static', filename='uploads/placeholder.jpeg') }}" alt="Image of {{ recipe['title'] }}">
-                        </div>
+                        <h2>{{ recipe['title'] }}</h2>
+                        {% if recipe['image_url'] %}
+                        <img src="{{ recipe['image_url'] }}" alt="Recipe image" style="max-width: 300px; display: block; margin-bottom: 10px;">
+                        {% endif %}
                         <p>{{ recipe['description'] }}</p>
+                        <a href="{{ url_for('recipe_detail', recipe_id=recipe['recipe_id']) }}">View Recipe</a>
                     </div>
-                </a>
                 {% endfor %}
             </div>
         </div>
