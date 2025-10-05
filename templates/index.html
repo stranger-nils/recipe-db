@@ -150,7 +150,7 @@
                         <img src="{{ recipe['image_url'] }}" alt="Recipe image" style="max-width: 300px; display: block; margin-bottom: 10px;">
                         {% endif %}
                         <p>{{ recipe['description'] }}</p>
-                        <a href="{{ url_for('recipe_detail', recipe_id=recipe['recipe_id']) }}">View Recipe</a>
+                        <a href="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}">View Recipe</a>
                     </div>
                 {% endfor %}
             </div>
