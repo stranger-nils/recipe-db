@@ -202,12 +202,10 @@ def edit_recipe(recipe_id):
             ).scalar()
 
             file = request.files.get('image_file')
-            file = request.files.get('image_file')
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
-                # Upload to Supabase Storage
-                supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file.stream)
-                # Get the public URL
+                file_bytes = file.read()  # Read file as bytes
+                supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file_bytes)
                 image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
             else:
                 image_url = current_image_url if 'current_image_url' in locals() else ''
@@ -281,12 +279,9 @@ def new_recipe():
         file = request.files.get('image_file')
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            # Upload to Supabase Storage
-            supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file.stream)
-            # Get the public URL
+            file_bytes = file.read()  # Read file as bytes
+            supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file_bytes)
             image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
-        else:
-            image_url = current_image_url if 'current_image_url' in locals() else ''
 
         with engine.begin() as conn:
             res = conn.execute(text('''
