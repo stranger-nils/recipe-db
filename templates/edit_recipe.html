@@ -39,7 +39,7 @@
             <h1>Edit Recipe</h1>
             <form method="post" enctype="multipart/form-data">
                 <label>Title:
-                    <input type="text" name="title" value="{{ recipe[1] }}" required>
+                    <input type="text" name="title" value="{{ recipe['title'] }}" required>
                 </label>
                 <label>Description:
                     <textarea name="description" required>{{ recipe['description'] }}</textarea>
@@ -64,7 +64,7 @@
                     {% if is_new %}
                         <a href="{{ url_for('index') }}">Discard</a>
                     {% else %}
-                        <a href="{{ url_for('recipe_detail', recipe_id=recipe[0]) }}">Discard</a>
+                        <a href="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}">Discard</a>
                     {% endif %}
                 </div>
             </form>
