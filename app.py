@@ -7,6 +7,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Result
 from sqlalchemy.exc import SQLAlchemyError
+from supabase import create_client, Client
 
 load_dotenv()
 
@@ -26,6 +27,11 @@ def allowed_file(filename):
 
 TURSO_DB_URL = os.environ["TURSO_DB_URL"]
 TURSO_DB_AUTH_TOKEN = os.environ["TURSO_DB_AUTH_TOKEN"]
+
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_API_KEY = os.environ["SUPABASE_API_KEY"]
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
+SUPABASE_BUCKET = "recipe-images" 
 
 # Create a single, global engine at startup
 engine = create_engine(
@@ -196,13 +202,15 @@ def edit_recipe(recipe_id):
             ).scalar()
 
             file = request.files.get('image_file')
+            file = request.files.get('image_file')
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(filepath)
-                image_url = '/' + filepath.replace('\\', '/')
+                # Upload to Supabase Storage
+                supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file, upsert=True)
+                # Get the public URL
+                image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
             else:
-                image_url = current_image_url
+                image_url = current_image_url if 'current_image_url' in locals() else ''
 
             conn.execute(text('''
                 UPDATE recipe
@@ -273,9 +281,12 @@ def new_recipe():
         file = request.files.get('image_file')
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            image_url = '/' + filepath.replace('\\', '/')
+            # Upload to Supabase Storage
+            supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file, upsert=True)
+            # Get the public URL
+            image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
+        else:
+            image_url = current_image_url if 'current_image_url' in locals() else ''
 
         with engine.begin() as conn:
             res = conn.execute(text('''

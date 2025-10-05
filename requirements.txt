@@ -6,3 +6,4 @@ gunicorn
 werkzeug
 sqlalchemy>=2
 sqlalchemy-libsql 
+supabase
