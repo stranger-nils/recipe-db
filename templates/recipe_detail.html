@@ -66,10 +66,9 @@
             </div>
         </div>
         <h1>{{ recipe['title'] }}</h1>
-        {% if recipe['image_url'] %}
-        <img src="{{ recipe['image_url'] }}" alt="Recipe image" style="max-width: 400px; margin-bottom: 20px;">
-        {% endif %}
-        <p>{{ recipe['description'] }}</p>
+        <div class="image-square">
+            <img src="{{ recipe['image_url'] if recipe['image_url'] else url_for('static', filename='uploads/placeholder.jpeg') }}" alt="Image of {{ recipe['title'] }}">
+        </div>
         <p><strong>Description:</strong> {{ recipe['description'] }}</p>
 
         <h2>Ingredients</h2>
