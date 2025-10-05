@@ -206,7 +206,7 @@ def edit_recipe(recipe_id):
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
                 # Upload to Supabase Storage
-                supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file, upsert=True)
+                supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file)
                 # Get the public URL
                 image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
             else:
@@ -282,7 +282,7 @@ def new_recipe():
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             # Upload to Supabase Storage
-            supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file, upsert=True)
+            supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file)
             # Get the public URL
             image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
         else:
