@@ -1,8 +1,7 @@
-# Ignore local environment and database files
 .env
 dev.db
 venv/
 __pycache__/
 scripts/
 static/uploads/
-flasth_session/
+flask_session/

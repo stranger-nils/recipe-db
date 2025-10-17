@@ -5,8 +5,7 @@ openai
 gunicorn
 werkzeug
 sqlalchemy>=2
+sqlalchemy-libsql
 supabase
-# For local development
-# sqlite3 is included in Python standard library
 python-dotenv
 sqlalchemy>=2
