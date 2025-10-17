@@ -1,4 +1,8 @@
-recipe.db
+# Ignore local environment and database files
 .env
-flask_session/
+dev.db
+venv/
+__pycache__/
+scripts/
 static/uploads/
+flasth_session/

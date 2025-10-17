@@ -103,7 +103,7 @@
             <form method="get" class="filter-container">
                 <label for="ingredients">Filter by ingredient:</label>
                 <select name="ingredients" id="ingredients" multiple="multiple" style="min-width:250px;">
-                    {% for ing in all_ingredients|sort(attribute='name') %}
+                    {% for ing in all_ingredients|selectattr('name')|sort(attribute='name') %}
                         <option value="{{ ing['id'] }}" {% if ing['id'] in selected_ingredients %}selected{% endif %}>{{ ing['name'] }}</option>
                     {% endfor %}
                 </select>

@@ -25,21 +25,31 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-TURSO_DB_URL = os.environ["TURSO_DB_URL"]
-TURSO_DB_AUTH_TOKEN = os.environ["TURSO_DB_AUTH_TOKEN"]
+# Database configuration
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_API_KEY = os.environ["SUPABASE_API_KEY"]
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
-SUPABASE_BUCKET = "recipe-images" 
+# If DATABASE_URL is set to SQLite, use it for local dev
+if DATABASE_URL and DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
+else:
+    TURSO_DB_URL = os.getenv("TURSO_DB_URL")
+    TURSO_DB_AUTH_TOKEN = os.getenv("TURSO_DB_AUTH_TOKEN")
+    engine = create_engine(
+        f"sqlite+{TURSO_DB_URL}?secure=true",
+        connect_args={"auth_token": TURSO_DB_AUTH_TOKEN},
+        pool_pre_ping=True,
+        future=True,
+    )
 
-# Create a single, global engine at startup
-engine = create_engine(
-    f"sqlite+{TURSO_DB_URL}?secure=true",
-    connect_args={"auth_token": TURSO_DB_AUTH_TOKEN},
-    pool_pre_ping=True,
-    future=True,
-)
+USE_SUPABASE = not (DATABASE_URL and DATABASE_URL.startswith("sqlite"))
+if USE_SUPABASE:
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
+    from supabase import create_client, Client
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
+    SUPABASE_BUCKET = "recipe-images"
+
+
 # Use server-side session storage
 app.config['SESSION_TYPE'] = 'filesystem'
 Session(app)
@@ -204,9 +214,14 @@ def edit_recipe(recipe_id):
             file = request.files.get('image_file')
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
-                file_bytes = file.read()  # Read file as bytes
-                supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file_bytes)
-                image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
+                if USE_SUPABASE:
+                    file_bytes = file.read()
+                    supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file_bytes)
+                    image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
+                else:
+                    local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(local_path)
+                    image_url = f"/static/uploads/{filename}"
             else:
                 image_url = current_image_url if 'current_image_url' in locals() else ''
 
@@ -279,9 +294,15 @@ def new_recipe():
         file = request.files.get('image_file')
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            file_bytes = file.read()  # Read file as bytes
-            supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file_bytes)
-            image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
+            if USE_SUPABASE:
+                file_bytes = file.read()
+                supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file_bytes)
+                image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
+            else:
+                local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(local_path)
+                image_url = f"/static/uploads/{filename}"
+
 
         with engine.begin() as conn:
             res = conn.execute(text('''
