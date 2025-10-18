@@ -205,6 +205,8 @@ def edit_recipe(recipe_id):
             ingredients_text = request.form['ingredients']
             instructions = request.form['instructions']
             notes = request.form['notes']
+            menu = request.form['menu']
+            section = request.form['section']
             tags = request.form['tags']
 
             current_image_url = conn.execute(
@@ -227,11 +229,11 @@ def edit_recipe(recipe_id):
 
             conn.execute(text('''
                 UPDATE recipe
-                SET title=:title, description=:description, instructions=:instructions, notes=:notes, image_url=:image_url, tags=:tags
+                SET title=:title, description=:description, instructions=:instructions, notes=:notes, image_url=:image_url, menu=:menu, section=:section, tags=:tags
                 WHERE id=:id
             '''), {
                 'title': title, 'description': description, 'instructions': instructions,
-                'notes': notes, 'image_url': image_url, 'tags': tags, 'id': recipe_id
+                'notes': notes, 'image_url': image_url, 'menu': menu, 'section': section, 'tags': tags, 'id': recipe_id
             })
 
             conn.execute(text("DELETE FROM recipe_ingredient WHERE recipe_id=:id"), {'id': recipe_id})
@@ -288,8 +290,11 @@ def new_recipe():
         ingredients_text = request.form['ingredients']
         instructions = request.form['instructions']
         notes = request.form['notes']
+        menu = request.form['menu']
+        section = request.form['section']
         tags = request.form['tags']
 
+        # Handle image upload
         image_url = ''
         file = request.files.get('image_file')
         if file and allowed_file(file.filename):
@@ -304,13 +309,14 @@ def new_recipe():
                 image_url = f"/static/uploads/{filename}"
 
 
+        # Insert new recipe
         with engine.begin() as conn:
             res = conn.execute(text('''
-                INSERT INTO recipe (title, description, instructions, notes, image_url, tags)
-                VALUES (:title, :description, :instructions, :notes, :image_url, :tags)
+                INSERT INTO recipe (title, description, instructions, notes, menu, section, image_url, tags)
+                VALUES (:title, :description, :instructions, :notes, :menu, :section, :image_url, :tags)
             '''), {
                 'title': title, 'description': description, 'instructions': instructions,
-                'notes': notes, 'image_url': image_url, 'tags': tags
+                'notes': notes, 'menu': menu, 'section': section, 'image_url': image_url, 'tags': tags
             })
             recipe_id = res.lastrowid
 
