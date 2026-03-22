@@ -1,0 +1,11 @@
+services:
+  recipe-db:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5001:5001"
+    volumes:
+      - ./data/recipe.db:/app/recipe.db
+      - ./data/uploads:/app/static/uploads
+    env_file:
+      - .env
