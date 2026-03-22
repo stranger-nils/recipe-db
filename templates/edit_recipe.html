@@ -50,14 +50,20 @@
                 <label>Instructions:
                     <textarea name="instructions" required>{{ recipe['instructions'] }}</textarea>
                 </label>
+                <label>Menu:
+                    <textarea name="menu" required>{{ recipe['menu'] }}</textarea>
+                </label>
+                <label>Section:
+                    <textarea name="section" required>{{ recipe['section'] }}</textarea>
+                </label>
+                <label>Tags:
+                    <input type="text" name="tags" value="{{ recipe['tags'] }}">
+                </label>
                 <label>Notes:
                     <textarea name="notes">{{ recipe['notes'] }}</textarea>
                 </label>
                 <label>Upload Image:
                     <input type="file" name="image_file" accept="image/*">
-                </label>
-                <label>Tags:
-                    <input type="text" name="tags" value="{{ recipe['tags'] }}">
                 </label>
                 <div class="actions">
                     <button type="submit">Save</button>
