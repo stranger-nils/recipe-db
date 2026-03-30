@@ -1,8 +1,6 @@
 from dotenv import load_dotenv
-from openai import OpenAI
 import os
-from flask import Flask, request, render_template, session, redirect, url_for
-from flask_session import Session
+from flask import Flask, request, render_template, redirect, url_for
 from werkzeug.utils import secure_filename
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Result
@@ -11,10 +9,7 @@ from supabase import create_client, Client
 
 load_dotenv()
 
-client = OpenAI()
-
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY")
 
 UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
@@ -49,10 +44,6 @@ if USE_SUPABASE:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
     SUPABASE_BUCKET = "recipe-images"
 
-
-# Use server-side session storage
-app.config['SESSION_TYPE'] = 'filesystem'
-Session(app)
 
 default_sql_query = (
     "SELECT DISTINCT\n"
@@ -137,50 +128,6 @@ def sql_sandbox():
             columns = []
 
     return render_template('sql.html', result=result, error=error, query=query, columns=columns)
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    user_input = request.form['message'].strip()
-    SYSTEM_PROMPT = (
-        "You are René, an AI sous chef. "
-        "Your role is to support the user (the head chef) with professional, accurate, and encouraging culinary help. "
-        "Be concise by default; expand with steps or deeper detail when asked. "
-        "Offer small, thoughtful improvements (seasoning, technique, presentation) without being bossy. "
-        "Use a warm, confident tone; light culinary metaphors are okay. End with a supportive note when it fits.\n\n"
-        "RECIPE OUTPUT CONTRACT (IMPORTANT):\n"
-        "- If the user asks for a recipe, a variation of a recipe, or a full method for a dish, "
-        "you MUST output exactly two sections with these exact headings:\n"
-        "Ingredients:\n"
-        "Instructions:\n"
-        "- Under 'Ingredients:', list one ingredient per line in the form: "
-        "\"<amount> <unit> <ingredient>\" (no bullets). Examples: \"200 g spaghetti\", \"1 tbsp olive oil\". "
-        "If unit is not applicable, omit it: \"1 lemon\".\n"
-        "- Under 'Instructions:', provide a numbered method using Arabic numerals, like:\n"
-        "1. Step one\n"
-        "2. Step two\n"
-        "3. ...\n"
-        "- Do not include any other sections (no 'Notes', no 'Servings') unless the user explicitly asks.\n"
-        "- If the user asks only for ideas/tips (not a full recipe), answer normally without the two sections.\n"
-        "- If the user asks for partial info (e.g., only ingredients), supply only what was asked — still honoring the format where relevant.\n"
-    )
-
-    if 'chat_history' not in session:
-        session['chat_history'] = [
-            {"role": "system", "content": SYSTEM_PROMPT}
-        ]
-
-    session['chat_history'].append({"role": "user", "content": user_input})
-
-    response = client.chat.completions.create(
-            model="gpt-5",
-            messages=session['chat_history']
-        )
-    reply = response.choices[0].message.content
-
-    session['chat_history'].append({"role": "assistant", "content": reply})
-    session.modified = True
-
-    return reply
 
 @app.route('/recipe/<int:recipe_id>')
 def recipe_detail(recipe_id):
@@ -358,78 +305,6 @@ def delete_recipe(recipe_id):
         conn.execute(text('DELETE FROM recipe_ingredient WHERE recipe_id=:id'), {'id': recipe_id})
         conn.execute(text('DELETE FROM recipe WHERE id=:id'), {'id': recipe_id})
     return redirect(url_for('index'))
-
-@app.route('/add_to_shopping_list/<int:recipe_id>', methods=['POST'])
-def add_to_shopping_list(recipe_id):
-    shopping_list = session.get('shopping_list', {})
-    shopping_list[str(recipe_id)] = shopping_list.get(str(recipe_id), 0) + 1
-    session['shopping_list'] = shopping_list
-    return redirect(url_for('shopping_list'))
-
-@app.route('/shopping_list', methods=['GET', 'POST'])
-def shopping_list():
-    
-    shopping_list = session.get('shopping_list', {})
-    recipes = []
-    ingredients_map = {}
-
-    with engine.connect() as conn:
-        for recipe_id, qty in shopping_list.items():
-            recipe = conn.execute(text('SELECT * FROM recipe WHERE id=:id'), {'id': recipe_id}).mappings().first()
-            if recipe:
-                recipes.append({'recipe': recipe, 'qty': qty})
-
-                rows = conn.execute(text('''
-                    SELECT i.name, ri.amount, ri.unit, i.grocery_category, i.kitchen_staple
-                    FROM recipe_ingredient ri
-                    JOIN ingredient i ON ri.ingredient_id = i.id
-                    WHERE ri.recipe_id = :id
-                '''), {'id': recipe_id}).mappings().all()
-                for ing in rows:
-                    key = (ing['name'], ing['unit'], ing['grocery_category'], ing['kitchen_staple'])
-                    try:
-                        amt = float(ing['amount']) * qty
-                    except:
-                        amt = f"{ing['amount']} x {qty}"
-                    if key in ingredients_map:
-                        try:
-                            ingredients_map[key] += amt
-                        except:
-                            ingredients_map[key] = f"{ingredients_map[key]}, {amt}"
-                    else:
-                        ingredients_map[key] = amt
-
-    sorted_items = sorted(
-        ingredients_map.items(),
-        key=lambda item: (
-            not item[0][3],
-            item[0][2] or '',
-            item[0][0]
-        )
-    )
-
-    return render_template('shopping_list.html', recipes=recipes, sorted_items=sorted_items)
-
-@app.route('/update_shopping_list/<int:recipe_id>/<action>', methods=['POST'])
-def update_shopping_list(recipe_id, action):
-    shopping_list = session.get('shopping_list', {})
-    rid = str(recipe_id)
-    if rid in shopping_list:
-        if action == 'increase':
-            shopping_list[rid] += 1
-        elif action == 'decrease':
-            shopping_list[rid] = max(1, shopping_list[rid] - 1)
-    session['shopping_list'] = shopping_list
-    return redirect(url_for('shopping_list'))
-
-@app.route('/remove_from_shopping_list/<int:recipe_id>', methods=['POST'])
-def remove_from_shopping_list(recipe_id):
-    shopping_list = session.get('shopping_list', {})
-    rid = str(recipe_id)
-    if rid in shopping_list:
-        del shopping_list[rid]
-    session['shopping_list'] = shopping_list
-    return redirect(url_for('shopping_list'))
 
 @app.route('/ingredient_library', methods=['GET', 'POST'])
 def ingredient_library():

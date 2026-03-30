@@ -1,7 +1,5 @@
 Flask
-Flask-Session
 python-dotenv
-openai
 gunicorn
 werkzeug
 sqlalchemy>=2
