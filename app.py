@@ -471,4 +471,4 @@ def ingredient_library():
     return render_template('ingredient_library.html', ingredients=ingredients, ingredient_recipes=ingredient_recipes)
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5001)), debug=True)
