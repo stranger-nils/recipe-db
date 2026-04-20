@@ -1,7 +1,17 @@
 .env
+.DS_Store
 dev.db
+recipe.db
+recipe.db-journal
+recipe.skill
 venv/
 __pycache__/
-scripts/
+scripts/*.csv
+scripts/download_and_remap_images.py
 static/uploads/
 flask_session/
+
+# Cowork / Claude Code working files
+.claude/ssh/
+.claude/pending-commits/
+.claude/applied-commits/

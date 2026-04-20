@@ -9,3 +9,5 @@ services:
       - ./data/uploads:/app/static/uploads
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=sqlite:///recipe.db

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>Diff v{{ v_from }} → v{{ v_to }} — {{ recipe['title'] }}</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 960px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        h1 { font-size: 1.4em; margin-bottom: 4px; }
+        .subtitle { color: #666; margin-bottom: 24px; font-size: 0.95em; }
+        .back { display: inline-block; margin-bottom: 16px; color: #444; text-decoration: none; font-size: 0.9em; }
+        .back:hover { text-decoration: underline; }
+        .field-block { margin-bottom: 28px; }
+        .field-label { font-weight: bold; font-size: 0.85em; text-transform: uppercase; color: #888; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .diff-side { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .diff-panel { border-radius: 6px; padding: 12px 14px; font-size: 0.9em; line-height: 1.5; white-space: pre-wrap; }
+        .diff-panel.before { background: #fff5f5; border: 1px solid #f5c6c6; }
+        .diff-panel.after  { background: #f5fff8; border: 1px solid #b7e4c7; }
+        .panel-label { font-size: 0.75em; font-weight: bold; color: #999; margin-bottom: 6px; }
+        .diff-lines { font-family: monospace; font-size: 0.88em; }
+        .diff-add  { background: #c8f7c5; }
+        .diff-rem  { background: #ffc8c8; }
+        .diff-info { color: #aaa; }
+        .ing-table { width: 100%; border-collapse: collapse; font-size: 0.92em; }
+        .ing-table td { padding: 6px 10px; border-bottom: 1px solid #f0f0f0; }
+        .ing-table tr:last-child td { border-bottom: none; }
+        .ing-add  { background: #f0fff4; }
+        .ing-rem  { background: #fff0f0; }
+        .ing-changed { background: #fffbea; }
+        .badge { font-size: 0.75em; font-weight: bold; padding: 1px 6px; border-radius: 10px; }
+        .badge-add  { background: #b7e4c7; color: #1a5c30; }
+        .badge-rem  { background: #f5c6c6; color: #7c1f1f; }
+        .badge-chg  { background: #ffe69c; color: #5c4400; }
+        .no-change  { color: #aaa; font-style: italic; font-size: 0.9em; }
+        .error { color: #c00; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="{{ url_for('recipe_history', recipe_id=recipe['id']) }}" class="back">← Versionshistorik</a>
+    <h1>{{ recipe['title'] }}</h1>
+    {% if ver_a and ver_b %}
+    <p class="subtitle">
+        Jämför version {{ v_from }}
+        <em>({{ ver_a['changed_at'][:16] | replace('T',' ') }}, {{ ver_a['changed_by'] }})</em>
+        → version {{ v_to }}
+        <em>({{ ver_b['changed_at'][:16] | replace('T',' ') }}, {{ ver_b['changed_by'] }})</em>
+    </p>
+    {% endif %}
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% elif diff is none %}
+    {% else %}
+
+    {# Text fields #}
+    {% set field_labels = {'title': 'Titel', 'description': 'Beskrivning', 'instructions': 'Instruktioner', 'notes': 'Anteckningar', 'tags': 'Taggar', 'section': 'Sektion', 'menu': 'Meny'} %}
+    {% for field, lines in field_diffs.items() %}
+    <div class="field-block">
+        <div class="field-label">{{ field_labels.get(field, field) }}</div>
+        <div class="diff-lines">
+            {% for line in lines %}
+                {% if line.startswith('+ ') %}
+                    <div class="diff-add">{{ line }}</div>
+                {% elif line.startswith('- ') %}
+                    <div class="diff-rem">{{ line }}</div>
+                {% elif line.startswith('? ') %}
+                    {# skip hint lines #}
+                {% else %}
+                    <div>{{ line }}</div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {# Ingredient diff #}
+    {% set changed_ings = ing_diff | selectattr('0', 'ne', 'same') | list %}
+    <div class="field-block">
+        <div class="field-label">Ingredienser</div>
+        {% if not changed_ings %}
+            <p class="no-change">Inga ändringar i ingredienser.</p>
+        {% else %}
+        <table class="ing-table">
+            {% for status, name, a, b in ing_diff %}
+                {% if status == 'added' %}
+                <tr class="ing-add">
+                    <td><span class="badge badge-add">+</span></td>
+                    <td>{{ name }}</td>
+                    <td>{{ b.amount }} {{ b.unit }}</td>
+                    <td></td>
+                </tr>
+                {% elif status == 'removed' %}
+                <tr class="ing-rem">
+                    <td><span class="badge badge-rem">−</span></td>
+                    <td>{{ name }}</td>
+                    <td>{{ a.amount }} {{ a.unit }}</td>
+                    <td></td>
+                </tr>
+                {% elif status == 'changed' %}
+                <tr class="ing-changed">
+                    <td><span class="badge badge-chg">~</span></td>
+                    <td>{{ name }}</td>
+                    <td><s style="color:#999">{{ a.amount }} {{ a.unit }}</s></td>
+                    <td>→ {{ b.amount }} {{ b.unit }}</td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+        </table>
+        {% endif %}
+    </div>
+
+    {% if not field_diffs and not changed_ings %}
+        <p class="no-change">Inga ändringar mellan dessa versioner.</p>
+    {% endif %}
+
+    {% endif %}
+</div>
+</body>
+</html>

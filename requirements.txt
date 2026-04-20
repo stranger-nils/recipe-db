@@ -3,4 +3,3 @@ python-dotenv
 gunicorn
 werkzeug
 sqlalchemy>=2
-supabase

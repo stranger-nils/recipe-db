@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>Inköpslista</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 860px; margin: 0 auto; }
+        h1 { font-size: 1.6em; margin-bottom: 4px; }
+        .back { display: inline-block; margin-bottom: 16px; color: #444; text-decoration: none; font-size: 0.9em; }
+        .back:hover { text-decoration: underline; }
+
+        /* Picker */
+        .picker-card { background: #fff; border-radius: 8px; padding: 20px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        .recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 14px 0; }
+        .recipe-check { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fafafa; cursor: pointer; transition: background 0.15s; }
+        .recipe-check:hover { background: #f0f4ff; }
+        .recipe-check input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+        .recipe-check.selected { background: #e8f0fe; border-color: #4285f4; }
+        .recipe-name { font-size: 0.92em; }
+        .controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+        .btn-generate { background: #4CAF50; color: white; border: none; padding: 10px 22px; border-radius: 6px; font-size: 1em; cursor: pointer; }
+        .btn-generate:hover { background: #43a047; }
+        .staple-toggle label { font-size: 0.9em; color: #555; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+
+        /* Result */
+        .result-card { background: #fff; border-radius: 8px; padding: 20px 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+        .result-title { font-size: 1.1em; font-weight: bold; }
+        .btn-print { background: #eee; border: none; padding: 7px 16px; border-radius: 5px; cursor: pointer; font-size: 0.9em; }
+        .btn-print:hover { background: #ddd; }
+        .category-section { margin-bottom: 18px; }
+        .category-label { font-size: 0.8em; font-weight: bold; text-transform: uppercase; letter-spacing: 0.06em; color: #888; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 8px; }
+        .ing-list { list-style: none; padding: 0; margin: 0; }
+        .ing-list li { display: flex; gap: 8px; padding: 5px 0; font-size: 0.95em; border-bottom: 1px dotted #f0f0f0; }
+        .ing-list li:last-child { border-bottom: none; }
+        .ing-amount { color: #555; min-width: 80px; }
+        .ing-name { flex: 1; }
+        .staple { opacity: 0.45; }
+        .hide-staples .staple { display: none; }
+        .selected-recipes { font-size: 0.85em; color: #777; margin-bottom: 14px; }
+        .error { color: #c00; margin-top: 8px; font-size: 0.9em; }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .picker-card, .back, .btn-print, .btn-generate { display: none !important; }
+            .container { max-width: 100%; }
+            .result-card { box-shadow: none; padding: 0; }
+            .staple { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="/" class="back">← Tillbaka till receptgalleriet</a>
+    <h1>Inköpslista</h1>
+
+    <div class="picker-card">
+        <form method="post">
+            <div class="recipe-grid">
+                {% for r in recipes %}
+                <label class="recipe-check {% if r['id'] in selected_ids %}selected{% endif %}">
+                    <input type="checkbox" name="recipe_ids" value="{{ r['id'] }}"
+                           {% if r['id'] in selected_ids %}checked{% endif %}
+                           onchange="this.closest('label').classList.toggle('selected', this.checked)">
+                    <span class="recipe-name">{{ r['title'] }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="controls">
+                <button type="submit" class="btn-generate">Generera inköpslista</button>
+                <div class="staple-toggle">
+                    <label>
+                        <input type="checkbox" name="hide_staples" value="1"
+                               {% if hide_staples %}checked{% endif %}>
+                        Dölj skafferivaror
+                    </label>
+                </div>
+            </div>
+            {% if error %}
+                <p class="error">{{ error }}</p>
+            {% endif %}
+        </form>
+    </div>
+
+    {% if result is not none %}
+    <div class="result-card {% if hide_staples %}hide-staples{% endif %}" id="result">
+        <div class="result-header">
+            <div>
+                <div class="result-title">Inköpslista</div>
+                {% if selected_recipes %}
+                <div class="selected-recipes">
+                    {{ selected_recipes | map(attribute='title') | join(', ') }}
+                </div>
+                {% endif %}
+            </div>
+            <button class="btn-print" onclick="window.print()">🖨 Skriv ut</button>
+        </div>
+
+        {% if result %}
+            {% for category, items in result %}
+            <div class="category-section">
+                <div class="category-label">{{ category or 'Övrigt' }}</div>
+                <ul class="ing-list">
+                    {% for item in items %}
+                    <li class="{% if item.kitchen_staple %}staple{% endif %}">
+                        <span class="ing-amount">{{ item.amount }} {{ item.unit }}</span>
+                        <span class="ing-name">{{ item.name }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="color:#888">Inga ingredienser hittades för valda recept.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+</body>
+</html>
