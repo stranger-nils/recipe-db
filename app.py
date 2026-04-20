@@ -3,9 +3,7 @@ import os
 from flask import Flask, request, render_template, redirect, url_for
 from werkzeug.utils import secure_filename
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Result
 from sqlalchemy.exc import SQLAlchemyError
-from supabase import create_client, Client
 
 load_dotenv()
 
@@ -16,33 +14,18 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-# Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL")
 
-# If DATABASE_URL is set to SQLite, use it for local dev
-if DATABASE_URL and DATABASE_URL.startswith("sqlite"):
-    engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
-else:
-    TURSO_DB_URL = os.getenv("TURSO_DB_URL")
-    TURSO_DB_AUTH_TOKEN = os.getenv("TURSO_DB_AUTH_TOKEN")
-    engine = create_engine(
-        f"sqlite+{TURSO_DB_URL}?secure=true",
-        connect_args={"auth_token": TURSO_DB_AUTH_TOKEN},
-        pool_pre_ping=True,
-        future=True,
-    )
-
-USE_SUPABASE = not (DATABASE_URL and DATABASE_URL.startswith("sqlite"))
-if USE_SUPABASE:
-    SUPABASE_URL = os.getenv("SUPABASE_URL")
-    SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
-    from supabase import create_client, Client
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_API_KEY)
-    SUPABASE_BUCKET = "recipe-images"
+# Database configuration — plain SQLite.
+# Local dev: defaults to sqlite:///recipe.db.
+# VPS: DATABASE_URL is set via docker-compose to sqlite:///recipe.db
+#      and bind-mounted from /opt/recipe-db/data/recipe.db on the host.
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///recipe.db")
+engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
 
 
 default_sql_query = (
@@ -61,7 +44,7 @@ default_sql_query = (
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    
+
     with engine.connect() as conn:
         # Fetch all ingredients for the filter dropdown
         all_ingredients = conn.execute(text('SELECT id, name FROM ingredient ORDER BY name')).mappings().all()
@@ -109,7 +92,7 @@ def sql_sandbox():
     error = ''
     query = ''
     columns = []
-    
+
     if request.method == 'POST':
         query = request.form['query']
         try:
@@ -131,7 +114,7 @@ def sql_sandbox():
 
 @app.route('/recipe/<int:recipe_id>')
 def recipe_detail(recipe_id):
-    
+
     with engine.connect() as conn:
         recipe = conn.execute(text('SELECT * FROM recipe WHERE id=:id'), {'id': recipe_id}).mappings().first()
         ingredients = conn.execute(text('''
@@ -144,7 +127,7 @@ def recipe_detail(recipe_id):
 
 @app.route('/recipe/<int:recipe_id>/edit', methods=['GET', 'POST'])
 def edit_recipe(recipe_id):
-    
+
     with engine.begin() as conn:
         if request.method == 'POST':
             title = request.form['title']
@@ -163,14 +146,9 @@ def edit_recipe(recipe_id):
             file = request.files.get('image_file')
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
-                if USE_SUPABASE:
-                    file_bytes = file.read()
-                    supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file_bytes)
-                    image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
-                else:
-                    local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(local_path)
-                    image_url = f"/static/uploads/{filename}"
+                local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(local_path)
+                image_url = f"/static/uploads/{filename}"
             else:
                 image_url = current_image_url if 'current_image_url' in locals() else ''
 
@@ -230,7 +208,7 @@ def edit_recipe(recipe_id):
 
 @app.route('/recipe/new/edit', methods=['GET', 'POST'])
 def new_recipe():
-    
+
     if request.method == 'POST':
         title = request.form['title']
         description = request.form['description']
@@ -246,14 +224,9 @@ def new_recipe():
         file = request.files.get('image_file')
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
-            if USE_SUPABASE:
-                file_bytes = file.read()
-                supabase.storage.from_(SUPABASE_BUCKET).upload(filename, file_bytes)
-                image_url = supabase.storage.from_(SUPABASE_BUCKET).get_public_url(filename)
-            else:
-                local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(local_path)
-                image_url = f"/static/uploads/{filename}"
+            local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(local_path)
+            image_url = f"/static/uploads/{filename}"
 
 
         # Insert new recipe
@@ -300,7 +273,7 @@ def new_recipe():
 
 @app.route('/recipe/<int:recipe_id>/delete', methods=['POST'])
 def delete_recipe(recipe_id):
-    
+
     with engine.begin() as conn:
         conn.execute(text('DELETE FROM recipe_ingredient WHERE recipe_id=:id'), {'id': recipe_id})
         conn.execute(text('DELETE FROM recipe WHERE id=:id'), {'id': recipe_id})
@@ -308,7 +281,7 @@ def delete_recipe(recipe_id):
 
 @app.route('/ingredient_library', methods=['GET', 'POST'])
 def ingredient_library():
-    
+
     with engine.begin() as conn:
         if request.method == 'POST':
             ingredient_ids = [
