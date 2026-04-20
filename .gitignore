@@ -6,7 +6,8 @@ recipe.db-journal
 recipe.skill
 venv/
 __pycache__/
-scripts/
+scripts/*.csv
+scripts/download_and_remap_images.py
 static/uploads/
 flask_session/
 

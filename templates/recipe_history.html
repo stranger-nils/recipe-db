@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>Versionshistorik — {{ recipe['title'] }}</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        h1 { font-size: 1.4em; margin-bottom: 4px; }
+        .subtitle { color: #666; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; border-bottom: 2px solid #ddd; padding: 8px 12px; font-size: 0.9em; color: #555; }
+        td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+        tr:last-child td { border-bottom: none; }
+        .ver-num { font-weight: bold; color: #333; }
+        .changed-by { font-size: 0.85em; color: #888; }
+        .change-note { font-size: 0.9em; color: #444; font-style: italic; }
+        .diff-link { font-size: 0.85em; color: #1a73e8; text-decoration: none; }
+        .diff-link:hover { text-decoration: underline; }
+        .back { display: inline-block; margin-bottom: 16px; color: #444; text-decoration: none; font-size: 0.9em; }
+        .back:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <a href="/recipe/{{ recipe['id'] }}" class="back">← {{ recipe['title'] }}</a>
+    <h1>Versionshistorik</h1>
+    <p class="subtitle">{{ recipe['title'] }}</p>
+
+    {% if versions %}
+    <table>
+        <tr>
+            <th>Version</th>
+            <th>Datum</th>
+            <th>Källa</th>
+            <th>Anteckning</th>
+            <th></th>
+        </tr>
+        {% for v in versions %}
+        <tr>
+            <td class="ver-num">v{{ v['version_number'] }}</td>
+            <td>{{ v['changed_at'][:16] | replace('T', ' ') }}</td>
+            <td class="changed-by">{{ v['changed_by'] or '—' }}</td>
+            <td class="change-note">{{ v['change_note'] or '' }}</td>
+            <td>
+                {% if not loop.last %}
+                <a class="diff-link"
+                   href="{{ url_for('recipe_diff', recipe_id=recipe['id'], **{'from': v['version_number'] - 1, 'to': v['version_number']}) }}">
+                    visa diff ↗
+                </a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p style="color:#888;">Inga versioner sparade ännu.</p>
+    {% endif %}
+</div>
+</body>
+</html>
