@@ -128,9 +128,7 @@ Properties:
 
 Kanban-vy grupperad på `Status`:
 - `Idé`
-- `Planerat`
 - `Tillagad`
-- `Dokumenterad`
 - `Publicerad`
 
 Arbetsflöde: användaren flyttar kort manuellt. Auto-synk från skill → Notion kan komma i en senare fas om det behövs.

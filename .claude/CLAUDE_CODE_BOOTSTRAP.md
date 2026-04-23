@@ -10,10 +10,21 @@ Systerverktyget är **Cowork** (desktop-appen) som kör i en sandbox utan nätve
 
 ## Start-checklista
 
-1. Läs `CLAUDE.md` (rotmappen) — särskilt "Working modes"-sektionen.
-2. Läs `docs/WORKFLOW_OVERHAUL_PLAN.md` — full plan för vad som ska göras.
-3. Kolla efter pending commits: `ls -la .claude/pending-commits/`. Om det finns filer där behöver de applicera till VPS.
-4. Verifiera SSH-access: `ssh minvps 'echo ok'`.
+1. **Synka skills till global mapp** så Cowork ser dem i nästa session: `bash scripts/sync-skills.sh`. Se "Skill-synkning" nedan.
+2. Läs `CLAUDE.md` (rotmappen) — särskilt "Working modes"-sektionen.
+3. Läs `docs/WORKFLOW_OVERHAUL_PLAN.md` — full plan för vad som ska göras.
+4. Kolla efter pending commits: `ls -la .claude/pending-commits/`. Om det finns filer där behöver de applicera till VPS.
+5. Verifiera SSH-access: `ssh minvps 'echo ok'`.
+
+## Skill-synkning
+
+Projektets skills bor i `.claude/skills/` (versioneras i git, source of truth). Cowork laddar dock bara skills från `~/.claude/skills/` (global mapp på Macen, ej versionerad).
+
+Av den anledningen finns `scripts/sync-skills.sh` som speglar projekt-skills → global mapp. **Kör det vid varje session-start** (steg 1 ovan). Det är idempotent och rör inte skills i den globala mappen som tillhör andra projekt.
+
+**Regel:** Redigera skills enbart under `.claude/skills/` (denna repo), aldrig direkt i `~/.claude/skills/`. Ändringar i den globala mappen försvinner nästa gång synken körs.
+
+Om du lägger till en ny skill: skapa under `.claude/skills/<namn>/SKILL.md`, kör synken, och commita projekt-versionen.
 
 ## Vad du gör — typiska uppgifter
 
