@@ -32,20 +32,21 @@ A personal recipe website — a clean, user-friendly gallery of favorite recipes
 This project is worked on across two Claude environments with complementary roles:
 
 **Cowork (desktop app, sandboxed)** handles:
-- Recipe brainstorming and drafting (via the `recipe` skill).
+- Recipe brainstorming and drafting *new* recipes (via the `recipe` skill).
+- Editing/iterating on *existing* recipes (via the `edit-recipe` skill) — writes directly to the VPS database over the authenticated HTTP API. No Claude Code roundtrip needed.
 - Notion Kanban management for the recipe pipeline.
 - Shopping list generation (via the `shopping-list` skill) — saves to the Notion Inköpslistor database.
-- File/code edits that don't require VPS network access (e.g., Flask feature work, template changes, docs).
-- When the user commits a recipe, the skill writes a pending-commit JSON file to `.claude/pending-commits/`. It does NOT write to the database directly — Cowork's sandbox has no network access to the VPS.
+- File/code edits that don't require VPS shell access (e.g., Flask feature work, template changes, docs).
+- For *new* recipes, the `recipe` skill still writes a pending-commit JSON file to `.claude/pending-commits/`, since new recipes are rarer and benefit from the manual review step in Claude Code (especially for new ingredients).
 
 **Claude Code (terminal on the user's Macbook)** handles:
-- Applying pending commits to the VPS database via SSH.
-- Editing existing recipes on the VPS database.
-- Running migrations against the VPS database (e.g., version history).
+- Applying pending commits (new recipes) to the VPS database via SSH.
+- Running migrations against the VPS database (e.g., version history schema changes).
 - Skill synchronization (project `.claude/skills/` → user-global `~/.claude/skills/`) at session start, so Cowork picks them up. See `scripts/sync-skills.sh`.
-- Any work that requires direct access to the VPS (`ssh minvps`).
+- Any work that requires direct shell access to the VPS (`ssh minvps`) — server-side debugging, log inspection, container restarts.
+- Note: edits to existing recipes can also be done via Claude Code, but the `edit-recipe` skill there uses the same HTTP API as Cowork — there's no longer a separate "direct SSH edit" path.
 
-The same `recipe` skill works in both environments but detects which mode it is running in.
+Both `recipe` and `edit-recipe` skills work in either environment.
 
 See `docs/WORKFLOW_OVERHAUL_PLAN.md` for the detailed implementation plan, and `.claude/CLAUDE_CODE_BOOTSTRAP.md` for Claude Code session orientation.
 
@@ -55,7 +56,8 @@ Custom skills for this project live in `.claude/skills/`. They are the source of
 
 | Skill | Purpose |
 |---|---|
-| `recipe` | Brainstorm/draft/edit recipes; commit to SQLite recipe DB (direct on Mac, pending-commit in Cowork). |
+| `recipe` | Brainstorm and save *new* recipes. Cowork writes pending-commits; Claude Code applies them via SSH. Slash: `/recipe`. |
+| `edit-recipe` | Iterate on an *existing* recipe via post-cook reflection. Reads/writes via the HTTP API (`RECIPE_API_TOKEN`). Logs a new version with a `change_note`. Slash: `/edit-recipe`. |
 | `shopping-list` | Build a consolidated shopping list from recipes in the Notion Recept-pipeline; save as a categorized entry in the Notion Inköpslistor database. |
 
 **Sync:** Cowork only discovers skills under `~/.claude/skills/`, not project-level. `scripts/sync-skills.sh` mirrors `.claude/skills/` → `~/.claude/skills/` and is run by Claude Code at session start. Always edit skills in this repo, never directly in the global folder — global edits get overwritten on next sync.
@@ -101,9 +103,22 @@ Single-file Flask app (`app.py`) with Jinja2 templates and SQLAlchemy for databa
 
 **Deployment:** VPS (Debian/Ubuntu), Docker + docker-compose + nginx reverse proxy. GitHub Actions (`.github/workflows/deploy.yml`) runs `git pull && docker compose up --build -d` on push to `master` via SSH.
 
+## Recipe HTTP API
+
+The Flask app exposes a small JSON API used by the `edit-recipe` skill to read recipes and commit new versions without going through SSH. All endpoints require `Authorization: Bearer $RECIPE_API_TOKEN`.
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/recipe/search?q=<text>` | GET | Title substring search; returns `{results: [{id, title, section, menu}]}`. |
+| `/api/recipe/<id>` | GET | Full recipe + ingredients + `current_version_number`. |
+| `/api/recipe/<id>/commit-edit` | POST | Apply an edit. Body must include `change_note` and `expected_version_number`; remaining fields are partial — missing fields keep current values. Returns 409 on optimistic version conflict. |
+
+Server-side logic lives in `apply_recipe_edit()` in `app.py`, which is the same function the web edit form uses. New version rows are tagged `changed_by='chat'` (skill) or `'web'` (form).
+
 ## Environment Variables
 
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | SQLite connection string; defaults to `sqlite:///recipe.db`. |
 | `FLASK_SECRET_KEY` | Session encryption. |
+| `RECIPE_API_TOKEN` | Bearer token for `/api/recipe/*`. Set on VPS in `/opt/recipe-db/.env`. If empty/unset the API returns 503. The Cowork-side token lives in `.claude/.env` (gitignored) — see `.claude/.env.example`. |

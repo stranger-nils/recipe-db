@@ -37,25 +37,34 @@ def read_ings(recipe_id):
 
 def upsert_ingredient(ing):
     name = ing.get('name', '')
+    row = cur.execute("SELECT id FROM ingredient WHERE LOWER(name)=LOWER(?) AND id IS NOT NULL", (name,)).fetchone()
+    if row:
+        return row[0]
+    # ingredient.id is plain INTEGER (no autoincrement); assign explicitly.
+    new_id = cur.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM ingredient").fetchone()[0]
     cur.execute(
-        "INSERT OR IGNORE INTO ingredient (name, grocery_category, notes, kitchen_staple) VALUES (?, ?, '', ?)",
-        (name, ing.get('grocery_category', ''), ing.get('kitchen_staple', 0))
+        "INSERT INTO ingredient (id, name, grocery_category, notes, kitchen_staple) VALUES (?, ?, ?, '', ?)",
+        (new_id, name, ing.get('grocery_category', ''), ing.get('kitchen_staple', 0))
     )
-    row = cur.execute("SELECT id FROM ingredient WHERE LOWER(name)=LOWER(?)", (name,)).fetchone()
-    return row[0] if row else None
+    return new_id
 
 try:
     cur.execute('BEGIN')
     now = datetime.now(timezone.utc).isoformat()
 
     if op == 'create':
+        # The recipe.id column is plain INTEGER (not INTEGER PRIMARY KEY), so
+        # SQLite won't auto-assign it. Compute the next free id explicitly,
+        # otherwise id would stay NULL and /recipe/<id> can't find the row.
+        recipe_id = cur.execute(
+            "SELECT COALESCE(MAX(id), 0) + 1 FROM recipe"
+        ).fetchone()[0]
         cur.execute('''
-            INSERT INTO recipe (title, description, instructions, notes, image_url, tags, section, menu)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (commit.get('title'), commit.get('description'), commit.get('instructions'),
+            INSERT INTO recipe (id, title, description, instructions, notes, image_url, tags, section, menu)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (recipe_id, commit.get('title'), commit.get('description'), commit.get('instructions'),
               commit.get('notes'), commit.get('image_url'), commit.get('tags'),
               commit.get('section'), commit.get('menu')))
-        recipe_id = cur.lastrowid
 
         for ing in commit.get('ingredients', []):
             ing_id = upsert_ingredient(ing)

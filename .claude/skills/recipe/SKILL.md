@@ -1,15 +1,17 @@
 ---
 name: recipe
-description: "Brainstorma receptidéer, föreslå kompletta recept på svenska, spara godkända recept och redigera befintliga recept i SQLite-databasen. Triggas när användaren vill ha receptförslag, matinspiration, middagstips, spara ett recept, eller redigera/ändra/uppdatera ett befintligt recept. Nyckelord: recept, middag, mat, laga, ingredienser, spara recept, push, ändra, redigera, uppdatera recept."
+description: "Brainstorma receptidéer, föreslå kompletta recept på svenska och spara nya recept till SQLite-databasen. Triggas när användaren vill ha receptförslag, matinspiration, middagstips, eller spara ett nytt recept. Nyckelord: recept, middag, mat, laga, ingredienser, spara recept, push, brainstorm. För att redigera/uppdatera/justera ett befintligt recept — använd skillen edit-recipe istället."
 ---
 
-# Recipe Skill — Receptidéer, Redigering & Databashantering
+# Recipe Skill — Receptidéer & Nya recept
 
 ## Profil
 Läs `.claude/cowork-instructions.md` om den finns. Den definierar ton och samarbetsstil. Följ den.
 
 ## Syfte
-Hjälp användaren brainstorma receptidéer och redigera befintliga recept. Både nya recept och ändringar följer samma commit/push-flöde: visa preview i chatten, skriv till databasen först när användaren säger **"push"**.
+Hjälp användaren brainstorma receptidéer och spara nya recept i databasen. Visa preview i chatten, skriv till databasen först när användaren säger **"push"**.
+
+> **Edits hanteras av en separat skill.** Om användaren vill ändra något i ett *redan publicerat* recept — efterkok-reflektion, ny version, justering — invokera `edit-recipe`-skillen istället. Den här skillen handlar om **nya recept**.
 
 ## Språk
 Alla recept, ingredienser och instruktioner ska vara på **svenska**.
@@ -96,14 +98,12 @@ Frukt och grönt, Fläsk, Kött, Smaksättare, Alkohol, Konserver, Mejeri, Fåge
 ### Befintliga tags-konventioner
 Kommaseparerade, gemener: t.ex. `italiensk,pasta` eller `stark, nötkött`.
 
-## Arbetsflöden
+## Arbetsflöde — Nytt recept
 
-### A. Nytt recept
-
-#### Steg 1 — Brainstorming
+### Steg 1 — Brainstorming
 Ge **kompletta** receptförslag direkt (titel, beskrivning, ingredienser med mängd/enhet, numrerade instruktioner). Anpassa efter användarens önskemål. Var kreativ men praktisk — rätter man faktiskt vill laga hemma.
 
-#### Steg 2 — Commit preview
+### Steg 2 — Commit preview
 
 När användaren gillar ett recept och vill spara:
 
@@ -131,7 +131,7 @@ eller ge feedback för att justera.
 
 I Cowork-läge: visa **inte** numeriska ID:n (de tilldelas vid push mot VPS). I Claude Code-läge: visa preliminärt ID (MAX(id)+1 från VPS).
 
-#### Steg 3 — Push
+### Steg 3 — Push
 
 **Claude Code-läge:** Direkt mot VPS.
 
@@ -159,64 +159,7 @@ I Cowork-läge: visa **inte** numeriska ID:n (de tilldelas vid push mot VPS). I 
    för att skriva till VPS-databasen.
 ```
 
-### B. Redigera befintligt recept
-
-Triggas av t.ex. *"Ändra i [receptnamn]..."*, *"Uppdatera [receptnamn]..."*.
-
-#### Steg 1 — Hämta receptet
-
-- Claude Code: `ssh minvps "sqlite3 /opt/recipe-db/data/recipe.db 'SELECT * FROM recipe WHERE LOWER(title) LIKE ...'"`
-- Cowork: läs från lokal snapshot.
-
-Om flera recept matchar, lista och låt användaren välja.
-
-#### Steg 2 — Commit preview (redigering)
-
-```
-📝 COMMIT PREVIEW — REDIGERING
-═══════════════════════════════════
-
-📖 Recept: [titel] (id: [id])
-
-✏️  Ändringar:
-
-   [fältnamn]:
-   ❌ Före: [gammalt värde]
-   ✅ Efter: [nytt värde]
-
-   🥕 Nya ingredienser:
-      - [namn]
-   🗑️  Borttagna kopplingar:
-      - [ingrediens]
-   🔄 Ändrade kopplingar:
-      - [ingrediens] — [ny mängd] [enhet]
-
-═══════════════════════════════════
-Säg "push" för att spara,
-eller ge feedback för att justera.
-```
-
-#### Steg 3 — Push (redigering)
-
-**Claude Code-läge:**
-1. Inom en SSH-transaktion:
-   - Hämta nuvarande recept-state + ingredienser från VPS.
-   - INSERT en ny rad i `recipe_version` med nuvarande state (version innan ändring) om det är första edit:en efter migration; annars enligt MAX(version_number)+1.
-   - Kör UPDATE:ar på `recipe`. Uppdatera `recipe_ingredient` efter behov (DELETE + INSERT-mönster eller selektiv UPDATE).
-   - INSERT ny `recipe_version`-rad för *nya* state:et med `changed_by = 'chat'`.
-2. Bekräfta:
-
-```
-✅ Uppdaterat! [titel] (id: [id], version: [n])
-   - [sammanfattning]
-```
-
-**Cowork-läge:**
-1. Bygg commit-objekt med `operation: "update"`, `recipe_id`, `change_note`, och ändrade fält.
-2. Skriv till `.claude/pending-commits/<ISO-timestamp>_<slug>.json`.
-3. Samma bekräftelse som vid nytt recept.
-
-### C. "apply pending" (endast Claude Code-läge)
+## "apply pending" (endast Claude Code-läge)
 
 När användaren säger **"apply pending"** eller **"push pending"**:
 
@@ -224,7 +167,7 @@ När användaren säger **"apply pending"** eller **"push pending"**:
 2. Visa batch-preview: en rad per commit med filnamn, operation, titel.
 3. Vid bekräftelse, för varje fil:
    - Parsa JSON.
-   - Kör push-flödet (Steg 3 ovan) beroende på `operation`.
+   - Kör push-flödet ovan (just nu bara `operation: "create"` — edits hanteras av `edit-recipe`-skillen via HTTP-API och ligger inte i pending-kön).
    - Vid success: `mv <fil> .claude/applied-commits/`.
    - Vid error: rapportera, låt filen ligga kvar.
 4. Rapportera slutresultat:
@@ -263,9 +206,9 @@ När användaren säger **"apply pending"** eller **"push pending"**:
 }
 ```
 
-För `operation: "update"`: inkludera `recipe_id` (pliktigt) och `change_note` (kort beskrivning av ändringen); ingredienser och övriga fält representerar det *nya* state:et efter ändringen.
-
 Filnamn: `.claude/pending-commits/<YYYY-MM-DDTHH-MM-SSZ>_<slug>.json`. `slug` = lowercase, bindestreck istället för mellanslag, ASCII-safe.
+
+> **Notera:** `operation: "update"` används inte längre i pending-commit-flödet — edits hanteras av `edit-recipe`-skillen via HTTP-API. Den här skillen ska bara producera `create`-commits.
 
 ## Viktiga regler
 
@@ -279,3 +222,4 @@ Filnamn: `.claude/pending-commits/<YYYY-MM-DDTHH-MM-SSZ>_<slug>.json`. `slug` = 
 - **Visa alltid preview innan push** — aldrig direkt till DB utan bekräftelse.
 - **Versionshistorik**: Varje push (nytt eller edit) loggar en rad i `recipe_version`.
 - **Lokal snapshot skrivs aldrig**: I Cowork-läge är lokal `recipe.db` strikt read-only. All skrivning går till pending-commit-fil.
+- **Edits → annan skill**: Om användaren vill ändra ett befintligt recept, säg "Det här är `edit-recipe`-territorium — invokera den" istället för att gå vidare.

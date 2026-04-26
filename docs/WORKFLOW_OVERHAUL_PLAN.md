@@ -177,3 +177,23 @@ Arbetsflöde: användaren flyttar kort manuellt. Auto-synk från skill → Notio
 För `update` inkluderas `recipe_id` och `change_note` istället för ny ID-tilldelning.
 
 **Filnamnsmönster**: `.claude/pending-commits/<ISO-timestamp>_<slug>.json`
+
+## Fas 7 — Edits direkt från Cowork via HTTP-API (april 2026)
+
+**Bakgrund:** I praktiken visade sig friktionen "växla till Claude Code för att applicera pending commit" vara störande just för *edits*, inte för nya recept. Användaren ville kunna lämna en post-cook reflektion direkt i Cowork och få en ny version i databasen utan att öppna terminalen.
+
+**Lösning:** En liten autentiserad JSON-API på Flask-appen som Cowork kan anropa direkt via `mcp__workspace__bash` + `curl`. API:et återanvänder samma versions-logik som webb-formuläret.
+
+**Komponenter:**
+
+- `app.py` — `apply_recipe_edit()` hjälpfunktion som både `/recipe/<id>/edit`-formuläret och de nya API-routes använder. Stödjer `expected_version_number` för optimistisk konflikt-detektion.
+- `app.py` — endpoints: `GET /api/recipe/search`, `GET /api/recipe/<id>`, `POST /api/recipe/<id>/commit-edit`. Bearer-token auth via `RECIPE_API_TOKEN`.
+- `.claude/skills/edit-recipe/` — ny skill (utbruten från recipe/SKILL.md sektion B). Trigger: `/edit-recipe` eller fraser som "jag lagade X igår", "efterkok", "reflektion kring …". Hämtar receptet via API, föreslår justeringar, visar commit preview, pushar via `POST /api/recipe/<id>/commit-edit`.
+- `.claude/skills/recipe/` — trimmad: hanterar bara *nya* recept (sektion B borttagen). Description uppdaterad så den inte längre matchar edit-fraser.
+- `.claude/.env` (gitignored) — håller `RECIPE_API_URL` + `RECIPE_API_TOKEN` på Cowork-sidan. Mall i `.claude/.env.example`.
+
+**Nya recept** stannar på pending-commit-flödet tills vidare. Det manuella granskningssteget i Claude Code är värdefullt främst för nya ingredienser (där `kitchen_staple` och `grocery_category` ska sättas), och sker inte ofta nog för att friktionen ska kännas.
+
+**Versions-semantik är oförändrad:** varje edit INSERT:ar en `recipe_version`-rad som snapshottar pre-edit-tillståndet med `version_number = MAX+1` och `changed_by = 'chat'` (skill) eller `'web'` (formulär). API:et och webb-UI:et använder samma helper, så historiken blir homogen.
+
+**Säkerhet:** API-tokenen är en lång slumpsträng (`openssl rand -hex 32`), satt som env-variabel både på VPS:en (`/opt/recipe-db/.env`, läses av docker-compose) och på Mac:en (`.claude/.env`, läses av skillen). Inga hemligheter i git. Token jämförs i konstant tid (`hmac.compare_digest`).

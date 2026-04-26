@@ -15,3 +15,7 @@ flask_session/
 .claude/ssh/
 .claude/pending-commits/
 .claude/applied-commits/
+.claude/.env
+
+# Skill staging from Cowork sessions (apply via skill_changes/install.sh, then delete)
+skill_changes/
