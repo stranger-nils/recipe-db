@@ -1,34 +1,49 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="sv">
 <head>
     <meta charset="UTF-8">
     <title>Ingredient Library</title>
     <style>
         table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ccc; padding: 8px; }
+        th, td { border: 1px solid #ccc; padding: 8px; vertical-align: top; }
         th { background: #f5f5f5; }
-        input[type="text"] { width: 100%; }
+        input[type="text"], select { width: 100%; box-sizing: border-box; }
+        .hint { color: #666; font-size: 0.85em; }
     </style>
 </head>
 <body>
     <h1>Ingredient Library</h1>
+    <p class="hint">
+        Katalogen är källan-till-sanning. Varje ingrediens måste ha en
+        <strong>kategori</strong> och <strong>default-enhet</strong>. Lägg
+        felstavningar/synonymer som kommaseparerade alias så fångas de upp
+        automatiskt vid skrivning.
+    </p>
     <form method="post">
         <table>
             <tr>
-                <th>Name</th>
-                <th>Grocery Category</th>
-                <th>Notes</th>
+                <th>Namn</th>
+                <th>Kategori</th>
+                <th>Default-enhet</th>
+                <th>Aliases (komma-sep.)</th>
                 <th>Recipe IDs</th>
-                <th>Kitchen Staple</th>
+                <th>Skafferi</th>
             </tr>
             {% for ing in ingredients %}
             <tr>
                 <td>{{ ing['name'] }}</td>
                 <td>
-                    <input type="text" name="grocery_category_{{ ing['id'] }}" value="{{ ing['grocery_category'] or '' }}">
+                    <select name="grocery_category_{{ ing['id'] }}">
+                        {% for cat in allowed_categories %}
+                        <option value="{{ cat }}" {% if ing['grocery_category'] == cat %}selected{% endif %}>{{ cat }}</option>
+                        {% endfor %}
+                    </select>
                 </td>
                 <td>
-                    <input type="text" name="notes_{{ ing['id'] }}" value="{{ ing['notes'] or '' }}">
+                    <input type="text" name="default_unit_{{ ing['id'] }}" value="{{ ing['default_unit'] or '' }}">
+                </td>
+                <td>
+                    <input type="text" name="aliases_{{ ing['id'] }}" value="{{ ingredient_aliases[ing['id']] }}">
                 </td>
                 <td>
                     {{ ingredient_recipes[ing['id']] }}
@@ -41,6 +56,6 @@
         </table>
         <button type="submit">Save Changes</button>
     </form>
-    <p><a href="{{ url_for('index') }}">← Back to gallery</a></p>
+    <p><a href="{{ url_for('index') }}">← Tillbaka till galleriet</a></p>
 </body>
 </html>

@@ -57,31 +57,91 @@ class VersionConflict(Exception):
         )
 
 
-def _resolve_or_create_ingredient(conn, name, grocery_category='', kitchen_staple=0):
+class IngredientNotInCatalog(Exception):
+    """Raised when an ingredient name doesn't resolve to the canonical catalog
+    and the caller hasn't supplied enough metadata (grocery_category + default_unit)
+    to create a new canonical row."""
+    def __init__(self, name, missing):
+        self.name = name
+        self.missing = missing
+        super().__init__(
+            f"Ingrediensen '{name}' finns inte i katalogen. "
+            f"Lägg till den via /ingredient_library, eller skicka {missing} "
+            f"med skrivningen. Använd existerande namn eller alias."
+        )
+
+
+ALLOWED_GROCERY_CATEGORIES = {
+    "Frukt och grönt", "Färska örter", "Mejeri", "Kött", "Fågel", "Fläsk",
+    "Fisk", "Kolhydrater", "Baljväxter", "Konserver", "Smaksättare",
+    "Färdiga tillbehör", "Bageri", "Frys", "Alkohol", "Övrigt",
+}
+
+
+def _resolve_ingredient_id(conn, name):
+    """Return canonical ingredient id for `name`, matching by name (NOCASE)
+    or by aliases JSON-array. Returns None if no match in the catalog."""
     name = (name or '').strip()
     if not name:
         return None
     row_id = conn.execute(
-        text("SELECT id FROM ingredient WHERE LOWER(name)=LOWER(:name)"),
+        text("SELECT id FROM ingredient WHERE name = :name COLLATE NOCASE"),
         {'name': name},
     ).scalar()
     if row_id:
         return row_id
-    next_id = conn.execute(
-        text("SELECT COALESCE(MAX(id), 0) + 1 FROM ingredient")
-    ).scalar() or 1
+    # Alias lookup. aliases is a JSON array of strings stored per ingredient.
+    rows = conn.execute(text("SELECT id, aliases FROM ingredient")).mappings().all()
+    target = name.lower()
+    for r in rows:
+        try:
+            aliases = json.loads(r['aliases'] or '[]')
+        except (TypeError, ValueError):
+            continue
+        if any(target == (a or '').strip().lower() for a in aliases):
+            return r['id']
+    return None
+
+
+def _resolve_or_create_ingredient(conn, name, grocery_category=None,
+                                  default_unit=None, kitchen_staple=0):
+    """Strict resolver: matches the canonical catalog by name or alias.
+    Only creates a new row if BOTH grocery_category (valid) and default_unit
+    are supplied — otherwise raises IngredientNotInCatalog so the caller can
+    surface a helpful error rather than silently fabricating a NULL-category
+    entry."""
+    name = (name or '').strip()
+    if not name:
+        return None
+    existing = _resolve_ingredient_id(conn, name)
+    if existing:
+        return existing
+
+    missing = []
+    if not grocery_category or grocery_category not in ALLOWED_GROCERY_CATEGORIES:
+        missing.append('grocery_category')
+    if not default_unit or not str(default_unit).strip():
+        missing.append('default_unit')
+    if missing:
+        raise IngredientNotInCatalog(name, missing)
+
     conn.execute(
         text(
-            "INSERT INTO ingredient (id, name, grocery_category, notes, kitchen_staple) "
-            "VALUES (:id, :name, :gc, '', :ks)"
+            "INSERT INTO ingredient (name, grocery_category, default_unit, "
+            "                        kitchen_staple, aliases) "
+            "VALUES (:name, :gc, :du, :ks, '[]')"
         ),
         {
-            'id': next_id, 'name': name,
-            'gc': grocery_category or '',
-            'ks': int(kitchen_staple or 0),
+            'name': name,
+            'gc': grocery_category,
+            'du': str(default_unit).strip(),
+            'ks': 1 if kitchen_staple else 0,
         },
     )
-    return next_id
+    return conn.execute(
+        text("SELECT id FROM ingredient WHERE name = :name COLLATE NOCASE"),
+        {'name': name},
+    ).scalar()
 
 
 def apply_recipe_edit(conn, recipe_id, new_state, change_note=None,
@@ -164,7 +224,8 @@ def apply_recipe_edit(conn, recipe_id, new_state, change_note=None,
             ing_id = _resolve_or_create_ingredient(
                 conn,
                 name=ing.get('name', ''),
-                grocery_category=ing.get('grocery_category', ''),
+                grocery_category=ing.get('grocery_category'),
+                default_unit=ing.get('default_unit'),
                 kitchen_staple=ing.get('kitchen_staple', 0),
             )
             if not ing_id:
@@ -361,6 +422,17 @@ def edit_recipe(recipe_id):
                 )
             except RecipeNotFound:
                 return "Recipe not found", 404
+            except IngredientNotInCatalog as e:
+                recipe = conn.execute(
+                    text("SELECT * FROM recipe WHERE id=:id"), {'id': recipe_id}
+                ).mappings().first()
+                return render_template(
+                    'edit_recipe.html',
+                    recipe=recipe,
+                    ingredients_text=request.form['ingredients'],
+                    is_new=False,
+                    error=str(e),
+                ), 400
 
             return redirect(url_for('recipe_detail', recipe_id=recipe_id))
         else:
@@ -395,15 +467,16 @@ def new_recipe():
         type_ = request.form.get('type', '')
         tags = request.form['tags']
 
-        with engine.begin() as conn:
-            res = conn.execute(text('''
-                INSERT INTO recipe (title, description, instructions, notes, kitchen, type, tags)
-                VALUES (:title, :description, :instructions, :notes, :kitchen, :type, :tags)
-            '''), {
-                'title': title, 'description': description, 'instructions': instructions,
-                'notes': notes, 'kitchen': kitchen, 'type': type_, 'tags': tags
-            })
-            recipe_id = res.lastrowid
+        try:
+            with engine.begin() as conn:
+                res = conn.execute(text('''
+                    INSERT INTO recipe (title, description, instructions, notes, kitchen, type, tags)
+                    VALUES (:title, :description, :instructions, :notes, :kitchen, :type, :tags)
+                '''), {
+                    'title': title, 'description': description, 'instructions': instructions,
+                    'notes': notes, 'kitchen': kitchen, 'type': type_, 'tags': tags
+                })
+                recipe_id = res.lastrowid
 
             for line in ingredients_text.strip().split('\n'):
                 parts = line.strip().split(' ', 2)
@@ -418,11 +491,9 @@ def new_recipe():
                     name = ''
                 else:
                     continue
-                conn.execute(
-                    text("INSERT OR IGNORE INTO ingredient (name, grocery_category, notes) VALUES (:name, '', '')"),
-                    {'name': name}
-                )
-                ingredient_id = conn.execute(text("SELECT id FROM ingredient WHERE name=:name"), {'name': name}).scalar()
+                ingredient_id = _resolve_ingredient_id(conn, name)
+                if ingredient_id is None:
+                    raise IngredientNotInCatalog(name, ['grocery_category', 'default_unit'])
                 conn.execute(text('''
                     INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, unit, note)
                     VALUES (:recipe_id, :ingredient_id, :amount, :unit, :note)
@@ -450,6 +521,17 @@ def new_recipe():
                 'ings_json': json.dumps([dict(r) for r in new_ings], ensure_ascii=False),
                 'changed_at': datetime.now(timezone.utc).isoformat(),
             })
+        except IngredientNotInCatalog as e:
+            empty_recipe = {
+                'id': None, 'title': title, 'description': description,
+                'instructions': instructions, 'notes': notes,
+                'tags': tags, 'type': type_, 'kitchen': kitchen,
+            }
+            return render_template(
+                'edit_recipe.html', recipe=empty_recipe,
+                ingredients_text=ingredients_text, is_new=True,
+                error=str(e),
+            ), 400
 
         return redirect(url_for('recipe_detail', recipe_id=recipe_id))
     else:
@@ -474,29 +556,36 @@ def ingredient_library():
     with engine.begin() as conn:
         if request.method == 'POST':
             ingredient_ids = [
-                row['id'] for row in conn.execute(text('''
-                    SELECT DISTINCT i.id
-                    FROM ingredient i
-                    JOIN recipe_ingredient ri ON i.id = ri.ingredient_id
-                ''')).mappings().all()
+                row['id'] for row in conn.execute(text(
+                    'SELECT id FROM ingredient'
+                )).mappings().all()
             ]
             for ing_id in ingredient_ids:
-                grocery_category = request.form.get(f'grocery_category_{ing_id}', '')
-                notes = request.form.get(f'notes_{ing_id}', '')
+                grocery_category = request.form.get(f'grocery_category_{ing_id}', '').strip()
+                default_unit = request.form.get(f'default_unit_{ing_id}', '').strip()
+                aliases_raw = request.form.get(f'aliases_{ing_id}', '').strip()
                 kitchen_staple = 1 if request.form.get(f'kitchen_staple_{ing_id}') == 'on' else 0
+                if grocery_category not in ALLOWED_GROCERY_CATEGORIES:
+                    continue  # CHECK constraint skulle ändå reject:a
+                if not default_unit:
+                    continue
+                aliases_list = [a.strip() for a in aliases_raw.split(',') if a.strip()]
                 conn.execute(
-                    text('UPDATE ingredient SET grocery_category=:gc, notes=:notes, kitchen_staple=:ks WHERE id=:id'),
-                    {'gc': grocery_category, 'notes': notes, 'ks': kitchen_staple, 'id': ing_id}
+                    text('UPDATE ingredient SET grocery_category=:gc, '
+                         'default_unit=:du, kitchen_staple=:ks, aliases=:al '
+                         'WHERE id=:id'),
+                    {'gc': grocery_category, 'du': default_unit,
+                     'ks': kitchen_staple,
+                     'al': json.dumps(aliases_list, ensure_ascii=False),
+                     'id': ing_id}
                 )
 
-        ingredients = conn.execute(text('''
-            SELECT DISTINCT i.*
-            FROM ingredient i
-            JOIN recipe_ingredient ri ON i.id = ri.ingredient_id
-            ORDER BY i.name
-        ''')).mappings().all()
+        ingredients = conn.execute(text(
+            'SELECT * FROM ingredient ORDER BY name COLLATE NOCASE'
+        )).mappings().all()
 
         ingredient_recipes = {}
+        ingredient_aliases = {}
         for ing in ingredients:
             recipe_ids = [
                 str(row['recipe_id']) for row in conn.execute(
@@ -504,8 +593,19 @@ def ingredient_library():
                 ).mappings().all()
             ]
             ingredient_recipes[ing['id']] = ', '.join(recipe_ids)
+            try:
+                aliases = json.loads(ing['aliases'] or '[]')
+            except (TypeError, ValueError):
+                aliases = []
+            ingredient_aliases[ing['id']] = ', '.join(aliases)
 
-    return render_template('ingredient_library.html', ingredients=ingredients, ingredient_recipes=ingredient_recipes)
+    return render_template(
+        'ingredient_library.html',
+        ingredients=ingredients,
+        ingredient_recipes=ingredient_recipes,
+        ingredient_aliases=ingredient_aliases,
+        allowed_categories=sorted(ALLOWED_GROCERY_CATEGORIES),
+    )
 
 @app.route('/recipe/<int:recipe_id>/history')
 def recipe_history(recipe_id):
@@ -605,7 +705,8 @@ def api_recipe_get(recipe_id):
 
         ings = conn.execute(text('''
             SELECT i.id AS ingredient_id, i.name, i.grocery_category,
-                   i.kitchen_staple, ri.amount, ri.unit, ri.note
+                   i.default_unit, i.kitchen_staple, i.aliases,
+                   ri.amount, ri.unit, ri.note
             FROM recipe_ingredient ri
             JOIN ingredient i ON ri.ingredient_id = i.id
             WHERE ri.recipe_id = :id
@@ -635,7 +736,9 @@ def api_recipe_get(recipe_id):
                 'unit': r['unit'],
                 'note': r['note'],
                 'grocery_category': r['grocery_category'],
+                'default_unit': r['default_unit'],
                 'kitchen_staple': r['kitchen_staple'],
+                'aliases': json.loads(r['aliases'] or '[]'),
             } for r in ings
         ],
     })
@@ -712,6 +815,13 @@ def api_recipe_commit_edit(recipe_id):
             'current_version_number': e.current_version,
             'hint': 'Re-fetch the recipe via GET /api/recipe/<id> and rebuild your edit.',
         }), 409
+    except IngredientNotInCatalog as e:
+        return jsonify({
+            'error': 'Ingredient not in catalog',
+            'ingredient_name': e.name,
+            'missing_fields': e.missing,
+            'hint': str(e),
+        }), 400
     except SQLAlchemyError as e:
         return jsonify({'error': f'Database error: {e}'}), 500
 

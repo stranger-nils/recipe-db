@@ -39,11 +39,20 @@ Kommunicera tydligt med användaren i början av en arbetsflödes-sekvens vilket
 ### Schema
 ```sql
 recipe (id, title, description, instructions, notes, tags, type, kitchen)
-ingredient (id, name, grocery_category, notes, kitchen_staple)
+ingredient (id, name, grocery_category, default_unit, kitchen_staple, aliases)
 recipe_ingredient (recipe_id, ingredient_id, amount, unit, note)
 recipe_version (id, recipe_id, version_number, title, description, instructions, notes,
                 tags, type, kitchen, ingredients_json, changed_at, changed_by, change_note)
 ```
+
+`ingredient` är en **kanonisk katalog** (migration 006). Varje rad måste ha:
+- `name` (UNIQUE COLLATE NOCASE)
+- `grocery_category` (NOT NULL, måste vara från listan nedan)
+- `default_unit` (NOT NULL — t.ex. `g`, `dl`, `msk`, `tsk`, `st`, `klyfta`, `kruka`, `knippe`, `burk`)
+- `kitchen_staple` (0/1)
+- `aliases` (JSON-array, t.ex. `["korriander", "coriander"]`)
+
+Inga dubletter tillåts. Felstavningar/synonymer går i `aliases` på den kanoniska raden.
 
 ### Auktoritativ DB-path (Claude Code-läge)
 
@@ -92,8 +101,44 @@ def read_snapshot(db_path):
     return conn, tmp  # ansvar att stänga conn + radera tmp
 ```
 
-### Befintliga grocery_category-värden
-Frukt och grönt, Fläsk, Kött, Smaksättare, Alkohol, Konserver, Mejeri, Fågel, Kolhydrater, Färdiga tillbehör, Färska örter, Baljväxter, Övrigt.
+### Tillåtna grocery_category-värden (fast lista, CHECK constraint i DB)
+`Frukt och grönt`, `Färska örter`, `Mejeri`, `Kött`, `Fågel`, `Fläsk`, `Fisk`,
+`Kolhydrater`, `Baljväxter`, `Konserver`, `Smaksättare`, `Färdiga tillbehör`,
+`Bageri`, `Frys`, `Alkohol`, `Övrigt`.
+
+Använd **exakt** dessa strängar — DB:n rejectar allt annat.
+
+### Ingrediens-canonicalization — VIKTIGT
+
+Ingredient-tabellen tillåter inga dubletter. Innan du föreslår en ingrediens:
+
+1. **Slå upp i lokal snapshot / VPS** mot både `name` (NOCASE) **och** `aliases`-arrayen.
+2. **Matchar något** → använd det kanoniska namnet exakt som det står i DB. Inte din egen variant.
+3. **Granularitet**: katalogen ska bara innehålla saker som **handlas separat i butik**. Exempel:
+   - `ägg` finns. `äggula`/`äggvita` finns **inte** — det är samma inköp. Skriv `ägg` som ingrediens och lägg "endast gulor" i `recipe_ingredient.note`.
+   - `gullök` och `silverlök` finns separat (olika inköp).
+   - `vitlök` finns (default_unit `klyfta`). Skriv aldrig `vitlöksklyfta` som egen rad — det är ett alias.
+4. **Ny ingrediens behövs** → du måste alltid ange `grocery_category` (från listan ovan) **och** `default_unit` i pending-commit/preview. Annars rejectar DB:n (CHECK + NOT NULL).
+
+Lookup-mönster (Python, mot lokal snapshot):
+```python
+def resolve_ingredient(conn, query):
+    """Returnerar (id, canonical_name) eller (None, None)."""
+    row = conn.execute(
+        "SELECT id, name FROM ingredient WHERE name = ? COLLATE NOCASE",
+        (query,),
+    ).fetchone()
+    if row:
+        return row
+    # Alias-lookup
+    import json
+    for rid, name, aliases_json in conn.execute(
+        "SELECT id, name, aliases FROM ingredient"
+    ):
+        if query.lower() in [a.lower() for a in json.loads(aliases_json or '[]')]:
+            return (rid, name)
+    return (None, None)
+```
 
 ### Befintliga tags-konventioner
 Kommaseparerade, gemener: t.ex. `italiensk,pasta` eller `stark, nötkött`.
@@ -121,7 +166,8 @@ När användaren gillar ett recept och vill spara:
    kitchen: [kitchen]
 
 🥕 Ingredienser:
-   - [namn] — [mängd] [enhet]   (ny / existerande)
+   - [kanoniskt namn] — [mängd] [enhet]   (existerande)
+   - [nytt namn] — [mängd] [enhet]        (NY: kategori=X, default_unit=Y)
    - ...
 
 ═══════════════════════════════════
@@ -197,7 +243,8 @@ När användaren säger **"apply pending"** eller **"push pending"**:
       "unit": "g",
       "note": "",
       "kitchen_staple": 0,
-      "grocery_category": "Mejeri"
+      "grocery_category": "Mejeri",
+      "default_unit": "g"
     }
   ],
   "created_at": "2026-04-19T22:30:00Z",
@@ -212,8 +259,9 @@ Filnamn: `.claude/pending-commits/<YYYY-MM-DDTHH-MM-SSZ>_<slug>.json`. `slug` = 
 ## Viktiga regler
 
 - **ID-hantering**: Läs alltid MAX(id) från auktoritativ DB (VPS i Claude Code-läge) innan insert. Aldrig hårdkodade ID:n.
-- **Ingrediensmatchning**: Case-insensitive (`LOWER(name)`) för att undvika dubbletter.
-- **Nya ingredienser**: `kitchen_staple = 1` för vanliga skafferisaker (salt, peppar, olja, etc.), annars `0`.
+- **Ingrediensmatchning**: NOCASE + alias-lookup. Använd alltid kanoniskt namn från DB:n, aldrig din egen stavning om det finns en träff.
+- **Nya ingredienser**: kräver `grocery_category` (från listan) + `default_unit` + `kitchen_staple` (1 för skafferisaker som salt/peppar/olja, annars 0). Saknas något → DB:n rejectar med CHECK/NOT NULL.
+- **Granularitet**: bara det som inhandlas separat. `äggula` ≠ ny rad. `gullök` vs `silverlök` = separata rader.
 - **Instruktioner**: Numrerade steg, separerade med newlines.
 - **notes**: NULL om inget speciellt.
 - **Transaktioner**: Alla skrivningar inom `BEGIN; ... COMMIT;` (ROLLBACK vid fel).

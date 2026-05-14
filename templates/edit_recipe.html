@@ -37,6 +37,11 @@
     <div class="main-layout">
         <div class="main-content">
             <h1>{% if is_new %}Nytt recept{% else %}Edit Recipe{% endif %}</h1>
+            {% if error %}
+            <div style="background: #fdd; border: 1px solid #c33; padding: 10px; margin: 10px 0; border-radius: 4px;">
+                <strong>Fel:</strong> {{ error }}
+            </div>
+            {% endif %}
             <form method="post">
                 <label>Title:
                     <input type="text" name="title" value="{{ recipe['title'] }}" required>
