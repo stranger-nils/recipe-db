@@ -7,23 +7,12 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from flask import Flask, request, render_template, redirect, url_for, jsonify
-from werkzeug.utils import secure_filename
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 load_dotenv()
 
 app = Flask(__name__)
-
-UPLOAD_FOLDER = 'static/uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 # Database configuration — plain SQLite.
@@ -53,11 +42,6 @@ def _backup_before_edit(note: str | None = None) -> None:
 
 # ---------------------------------------------------------------------------
 # Recipe edit helper — shared by the web form and the JSON API.
-#
-# Semantics match scripts/skill_remote_commit.py and the historical web edit
-# logic: each edit INSERTs a row into recipe_version that snapshots the
-# state BEFORE the mutation, with version_number = MAX(version_number)+1.
-# The new (post-edit) state lives in the `recipe` table.
 # ---------------------------------------------------------------------------
 
 class RecipeNotFound(Exception):
@@ -74,13 +58,6 @@ class VersionConflict(Exception):
 
 
 def _resolve_or_create_ingredient(conn, name, grocery_category='', kitchen_staple=0):
-    """Case-insensitive ingredient lookup; create if missing. Returns id or None.
-
-    NOTE: the ingredient table's id column is NOT declared as INTEGER PRIMARY
-    KEY, so SQLite does not auto-assign it. We compute MAX(id)+1 explicitly to
-    avoid leaving id NULL on freshly-inserted rows. This matches the MAX(id)+1
-    convention documented in the recipe skill.
-    """
     name = (name or '').strip()
     if not name:
         return None
@@ -110,18 +87,14 @@ def _resolve_or_create_ingredient(conn, name, grocery_category='', kitchen_stapl
 def apply_recipe_edit(conn, recipe_id, new_state, change_note=None,
                       changed_by='chat', expected_version=None):
     """
-    Update an existing recipe with versioning. The caller MUST provide an
-    active SQLAlchemy transaction (e.g. via `with engine.begin() as conn:`).
+    Update an existing recipe with versioning.
 
     new_state keys (all optional — missing keys keep the current value):
-        title, description, instructions, notes, image_url, tags, section, menu
+        title, description, instructions, notes, tags, type, kitchen
         ingredients: list of dicts {name, amount, unit, note,
                                     grocery_category, kitchen_staple}.
                      If omitted/None, existing ingredients are kept untouched.
                      If provided, ingredients are fully replaced.
-
-    Returns: {'recipe_id', 'new_version_number', 'changed_at'}.
-    Raises RecipeNotFound or VersionConflict on error.
     """
     cur_recipe = conn.execute(
         text("SELECT * FROM recipe WHERE id=:id"), {'id': recipe_id}
@@ -151,17 +124,17 @@ def apply_recipe_edit(conn, recipe_id, new_state, change_note=None,
     conn.execute(text('''
         INSERT INTO recipe_version
             (recipe_id, version_number, title, description, instructions, notes,
-             image_url, tags, section, menu, ingredients_json, changed_at,
+             tags, type, kitchen, ingredients_json, changed_at,
              changed_by, change_note)
         VALUES (:recipe_id, :ver, :title, :description, :instructions, :notes,
-                :image_url, :tags, :section, :menu, :ings_json, :changed_at,
+                :tags, :type, :kitchen, :ings_json, :changed_at,
                 :changed_by, :change_note)
     '''), {
         'recipe_id': recipe_id, 'ver': next_ver,
         'title': cur_recipe['title'], 'description': cur_recipe['description'],
         'instructions': cur_recipe['instructions'], 'notes': cur_recipe['notes'],
-        'image_url': cur_recipe['image_url'], 'tags': cur_recipe['tags'],
-        'section': cur_recipe['section'], 'menu': cur_recipe['menu'],
+        'tags': cur_recipe['tags'],
+        'type': cur_recipe['type'], 'kitchen': cur_recipe['kitchen'],
         'ings_json': json.dumps([dict(r) for r in cur_ings], ensure_ascii=False),
         'changed_at': now, 'changed_by': changed_by, 'change_note': change_note,
     })
@@ -170,18 +143,16 @@ def apply_recipe_edit(conn, recipe_id, new_state, change_note=None,
     conn.execute(text('''
         UPDATE recipe SET
             title=:title, description=:description, instructions=:instructions,
-            notes=:notes, image_url=:image_url, tags=:tags, section=:section,
-            menu=:menu
+            notes=:notes, tags=:tags, type=:type, kitchen=:kitchen
         WHERE id=:id
     '''), {
         'title': new_state.get('title', cur_recipe['title']),
         'description': new_state.get('description', cur_recipe['description']),
         'instructions': new_state.get('instructions', cur_recipe['instructions']),
         'notes': new_state.get('notes', cur_recipe['notes']),
-        'image_url': new_state.get('image_url', cur_recipe['image_url']),
         'tags': new_state.get('tags', cur_recipe['tags']),
-        'section': new_state.get('section', cur_recipe['section']),
-        'menu': new_state.get('menu', cur_recipe['menu']),
+        'type': new_state.get('type', cur_recipe['type']),
+        'kitchen': new_state.get('kitchen', cur_recipe['kitchen']),
         'id': recipe_id,
     })
 
@@ -229,7 +200,6 @@ def _check_api_token():
     if not auth.startswith('Bearer '):
         return jsonify({'error': 'Missing bearer token'}), 401
     provided = auth[len('Bearer '):].strip()
-    # Constant-time compare to avoid timing attacks.
     if not hmac.compare_digest(provided, expected):
         return jsonify({'error': 'Invalid bearer token'}), 401
     return None
@@ -242,21 +212,26 @@ default_sql_query = (
     "    description,\n"
     "    instructions,\n"
     "    notes,\n"
-    "    image_url,\n"
     "    tags\n"
     "FROM recipe_with_ingredients\n"
     "WHERE 1=1\n"
     "    -- AND ingredient_name = ...\n"
 )
 
+GROUP_BY_OPTIONS = {'none', 'kitchen', 'type'}
+
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
 
     with engine.connect() as conn:
-        # Fetch all ingredients for the filter dropdown
         all_ingredients = conn.execute(text('SELECT id, name FROM ingredient ORDER BY name')).mappings().all()
 
         selected_ingredients = request.args.getlist('ingredients', type=int)
+        group_by = request.args.get('group_by', 'none')
+        if group_by not in GROUP_BY_OPTIONS:
+            group_by = 'none'
+
         advanced_sql = None
         recipes = []
         error = None
@@ -277,15 +252,27 @@ def index():
                     FROM recipe r
                     JOIN recipe_ingredient ri ON r.id = ri.recipe_id
                     WHERE ri.ingredient_id IN ({placeholders})
+                    ORDER BY r.title
                 '''
                 params = {f'id{i}': v for i, v in enumerate(selected_ingredients)}
                 recipes = conn.execute(text(query), params).mappings().all()
             else:
-                recipes = conn.execute(text('SELECT * FROM recipe')).mappings().all()
+                recipes = conn.execute(text('SELECT * FROM recipe ORDER BY title')).mappings().all()
+
+    # Group if requested.
+    grouped = None
+    if group_by in ('kitchen', 'type'):
+        buckets = {}
+        for r in recipes:
+            key = (r[group_by] or '').strip() or '(Ej angiven)'
+            buckets.setdefault(key, []).append(r)
+        grouped = sorted(buckets.items(), key=lambda kv: kv[0].lower())
 
     return render_template(
         'index.html',
         recipes=recipes,
+        grouped=grouped,
+        group_by=group_by,
         all_ingredients=all_ingredients,
         selected_ingredients=selected_ingredients,
         advanced_sql=advanced_sql,
@@ -355,28 +342,14 @@ def edit_recipe(recipe_id):
 
     with engine.begin() as conn:
         if request.method == 'POST':
-            current_image_url = conn.execute(
-                text("SELECT image_url FROM recipe WHERE id=:id"), {'id': recipe_id}
-            ).scalar()
-
-            file = request.files.get('image_file')
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(local_path)
-                image_url = f"/static/uploads/{filename}"
-            else:
-                image_url = current_image_url or ''
-
             new_state = {
                 'title': request.form['title'],
                 'description': request.form['description'],
                 'instructions': request.form['instructions'],
                 'notes': request.form['notes'],
-                'menu': request.form['menu'],
-                'section': request.form['section'],
+                'kitchen': request.form.get('kitchen', ''),
+                'type': request.form.get('type', ''),
                 'tags': request.form['tags'],
-                'image_url': image_url,
                 'ingredients': _parse_ingredients_textarea(request.form['ingredients']),
             }
 
@@ -418,28 +391,17 @@ def new_recipe():
         ingredients_text = request.form['ingredients']
         instructions = request.form['instructions']
         notes = request.form['notes']
-        menu = request.form['menu']
-        section = request.form['section']
+        kitchen = request.form.get('kitchen', '')
+        type_ = request.form.get('type', '')
         tags = request.form['tags']
 
-        # Handle image upload
-        image_url = ''
-        file = request.files.get('image_file')
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(local_path)
-            image_url = f"/static/uploads/{filename}"
-
-
-        # Insert new recipe
         with engine.begin() as conn:
             res = conn.execute(text('''
-                INSERT INTO recipe (title, description, instructions, notes, menu, section, image_url, tags)
-                VALUES (:title, :description, :instructions, :notes, :menu, :section, :image_url, :tags)
+                INSERT INTO recipe (title, description, instructions, notes, kitchen, type, tags)
+                VALUES (:title, :description, :instructions, :notes, :kitchen, :type, :tags)
             '''), {
                 'title': title, 'description': description, 'instructions': instructions,
-                'notes': notes, 'menu': menu, 'section': section, 'image_url': image_url, 'tags': tags
+                'notes': notes, 'kitchen': kitchen, 'type': type_, 'tags': tags
             })
             recipe_id = res.lastrowid
 
@@ -478,21 +440,25 @@ def new_recipe():
             conn.execute(text('''
                 INSERT INTO recipe_version
                     (recipe_id, version_number, title, description, instructions, notes,
-                     image_url, tags, section, menu, ingredients_json, changed_at, changed_by, change_note)
+                     tags, type, kitchen, ingredients_json, changed_at, changed_by, change_note)
                 VALUES (:recipe_id, 1, :title, :description, :instructions, :notes,
-                        :image_url, :tags, :section, :menu, :ings_json, :changed_at, 'web', 'Initial version')
+                        :tags, :type, :kitchen, :ings_json, :changed_at, 'web', 'Initial version')
             '''), {
                 'recipe_id': recipe_id, 'title': title, 'description': description,
-                'instructions': instructions, 'notes': notes, 'image_url': image_url,
-                'tags': tags, 'section': section, 'menu': menu,
+                'instructions': instructions, 'notes': notes,
+                'tags': tags, 'type': type_, 'kitchen': kitchen,
                 'ings_json': json.dumps([dict(r) for r in new_ings], ensure_ascii=False),
                 'changed_at': datetime.now(timezone.utc).isoformat(),
             })
 
         return redirect(url_for('recipe_detail', recipe_id=recipe_id))
     else:
-        empty_recipe = [None, '', '', '', '', '', '', '']
-        return render_template('edit_recipe.html', recipe=empty_recipe, is_new=True)
+        empty_recipe = {
+            'id': None, 'title': '', 'description': '', 'instructions': '',
+            'notes': '', 'tags': '', 'type': '', 'kitchen': '',
+        }
+        return render_template('edit_recipe.html', recipe=empty_recipe,
+                               ingredients_text='', is_new=True)
 
 @app.route('/recipe/<int:recipe_id>/delete', methods=['POST'])
 def delete_recipe(recipe_id):
@@ -587,7 +553,7 @@ def recipe_diff(recipe_id):
         if not ver_a or not ver_b:
             return "Version not found", 404
 
-    text_fields = ['title', 'description', 'instructions', 'notes', 'tags', 'section', 'menu']
+    text_fields = ['title', 'description', 'instructions', 'notes', 'tags', 'type', 'kitchen']
     field_diffs = {}
     for f in text_fields:
         a_val = ver_a[f] or ''
@@ -622,9 +588,6 @@ def recipe_diff(recipe_id):
 
 # ---------------------------------------------------------------------------
 # JSON API for the edit-recipe skill (Cowork & Claude Code).
-#
-# Auth: Authorization: Bearer $RECIPE_API_TOKEN. The token must be set as an
-# env var on the server; if it's empty the API returns 503.
 # ---------------------------------------------------------------------------
 
 @app.route('/api/recipe/<int:recipe_id>', methods=['GET'])
@@ -660,10 +623,9 @@ def api_recipe_get(recipe_id):
         'description': recipe['description'],
         'instructions': recipe['instructions'],
         'notes': recipe['notes'],
-        'image_url': recipe['image_url'],
         'tags': recipe['tags'],
-        'section': recipe['section'],
-        'menu': recipe['menu'],
+        'type': recipe['type'],
+        'kitchen': recipe['kitchen'],
         'current_version_number': current_version,
         'ingredients': [
             {
@@ -681,9 +643,7 @@ def api_recipe_get(recipe_id):
 
 @app.route('/api/recipe/search', methods=['GET'])
 def api_recipe_search():
-    """Lightweight title search so the skill can resolve a name to an id.
-    Query params: q (substring, case-insensitive).
-    """
+    """Lightweight title search so the skill can resolve a name to an id."""
     auth_err = _check_api_token()
     if auth_err is not None:
         return auth_err
@@ -692,12 +652,12 @@ def api_recipe_search():
     with engine.connect() as conn:
         if q:
             rows = conn.execute(text(
-                "SELECT id, title, section, menu FROM recipe "
+                "SELECT id, title, type, kitchen FROM recipe "
                 "WHERE LOWER(title) LIKE LOWER(:q) ORDER BY title"
             ), {'q': f"%{q}%"}).mappings().all()
         else:
             rows = conn.execute(text(
-                "SELECT id, title, section, menu FROM recipe ORDER BY title"
+                "SELECT id, title, type, kitchen FROM recipe ORDER BY title"
             )).mappings().all()
     return jsonify({'results': [dict(r) for r in rows]})
 
@@ -723,11 +683,8 @@ def api_recipe_commit_edit(recipe_id):
         except (TypeError, ValueError):
             return jsonify({'error': 'expected_version_number must be an integer'}), 400
 
-    # Whitelist allowed keys for new_state so callers can't sneak in
-    # unrelated columns. ingredients is optional; if present it replaces
-    # the full ingredient list for the recipe.
-    allowed = {'title', 'description', 'instructions', 'notes', 'image_url',
-               'tags', 'section', 'menu', 'ingredients'}
+    allowed = {'title', 'description', 'instructions', 'notes',
+               'tags', 'type', 'kitchen', 'ingredients'}
     new_state = {k: v for k, v in payload.items() if k in allowed}
 
     if 'ingredients' in new_state and new_state['ingredients'] is not None:
@@ -801,7 +758,6 @@ def shopping_list():
             SELECT id, title FROM recipe WHERE id IN ({placeholders})
         '''), params).mappings().all()
 
-    # Aggregate: key = (normalized name, unit)
     from collections import defaultdict
     agg = defaultdict(lambda: {'amounts': [], 'grocery_category': '', 'kitchen_staple': 0})
     for row in rows:
@@ -816,7 +772,6 @@ def shopping_list():
         except (ValueError, TypeError):
             entry['amounts'].append(row['amount'] or '')
 
-    # Build result grouped by category
     items = []
     for (name_norm, unit_norm), entry in agg.items():
         amounts = entry['amounts']
@@ -836,7 +791,6 @@ def shopping_list():
 
     items.sort(key=lambda x: (x['grocery_category'], x['name']))
 
-    # Group by category
     from itertools import groupby
     grouped = []
     for cat, group in groupby(items, key=lambda x: x['grocery_category']):

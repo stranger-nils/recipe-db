@@ -38,11 +38,11 @@ Kommunicera tydligt med användaren i början av en arbetsflödes-sekvens vilket
 
 ### Schema
 ```sql
-recipe (id, title, description, instructions, notes, image_url, tags, section, menu)
+recipe (id, title, description, instructions, notes, tags, type, kitchen)
 ingredient (id, name, grocery_category, notes, kitchen_staple)
 recipe_ingredient (recipe_id, ingredient_id, amount, unit, note)
 recipe_version (id, recipe_id, version_number, title, description, instructions, notes,
-                image_url, tags, section, menu, ingredients_json, changed_at, changed_by, change_note)
+                tags, type, kitchen, ingredients_json, changed_at, changed_by, change_note)
 ```
 
 ### Auktoritativ DB-path (Claude Code-läge)
@@ -108,7 +108,7 @@ Ge **kompletta** receptförslag direkt (titel, beskrivning, ingredienser med mä
 När användaren gillar ett recept och vill spara:
 
 1. **Läs snapshot** (Cowork) eller **läs VPS** (Claude Code) för ingrediens-matching.
-2. **Föreslå kategorisering**: `tags`, `section`, `menu` (tema med emoji).
+2. **Föreslå kategorisering**: `tags`, `type` (förrätt/huvudrätt/sidorätt/komponent/efterrätt), `kitchen` (kök, t.ex. Italienskt, Mexikanskt).
 3. **Visa preview:**
 
 ```
@@ -117,8 +117,8 @@ När användaren gillar ett recept och vill spara:
 
 📖 Recept: [titel]
    tags: [tags]
-   section: [section]
-   menu: [menu]
+   type: [type]
+   kitchen: [kitchen]
 
 🥕 Ingredienser:
    - [namn] — [mängd] [enhet]   (ny / existerande)
@@ -187,10 +187,9 @@ När användaren säger **"apply pending"** eller **"push pending"**:
   "description": "...",
   "instructions": "1. ...\n2. ...",
   "notes": null,
-  "image_url": null,
   "tags": "vegetariskt,tacos",
-  "section": "Tacos",
-  "menu": "🌮 Mexikanskt",
+  "type": "huvudrätt",
+  "kitchen": "Mexikanskt",
   "ingredients": [
     {
       "name": "halloumi",
@@ -216,7 +215,6 @@ Filnamn: `.claude/pending-commits/<YYYY-MM-DDTHH-MM-SSZ>_<slug>.json`. `slug` = 
 - **Ingrediensmatchning**: Case-insensitive (`LOWER(name)`) för att undvika dubbletter.
 - **Nya ingredienser**: `kitchen_staple = 1` för vanliga skafferisaker (salt, peppar, olja, etc.), annars `0`.
 - **Instruktioner**: Numrerade steg, separerade med newlines.
-- **image_url**: Lämna som NULL (hanteras via webb-UI).
 - **notes**: NULL om inget speciellt.
 - **Transaktioner**: Alla skrivningar inom `BEGIN; ... COMMIT;` (ROLLBACK vid fel).
 - **Visa alltid preview innan push** — aldrig direkt till DB utan bekräftelse.

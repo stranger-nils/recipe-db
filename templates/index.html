@@ -3,154 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <title>Recipe Gallery</title>
-    <!-- jQuery (required for Select2) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <!-- Select2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <!-- Select2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <style>
         body { font-family: Arial; padding: 20px; background: #f5f5f5; }
-        .filter-container { margin-bottom: 20px; }
-        .recipe-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
-            gap: 32px;
-            margin-top: 20px;
-            align-items: stretch; /* Ensures all cards in a row are same height */
+        .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
+        .group-tile {
+            border: 1px solid #ccc;
+            background: #fff;
+            border-radius: 8px;
+            padding: 10px 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
-        .recipe-grid a:visited,
-        .recipe-grid a:active,
-        .recipe-grid a:hover {
-            color: inherit;
-        }
-        .recipe-grid a {
+        .group-tile label { font-weight: bold; }
+        .recipe-list { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 0; margin-top: 16px; list-style: none; }
+        .recipe-list li { border-bottom: 1px solid #eee; }
+        .recipe-list li:last-child { border-bottom: none; }
+        .recipe-list a {
+            display: block;
+            padding: 12px 16px;
             text-decoration: none;
             color: inherit;
-            display: block;
         }
-        .recipe-card {
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 0px 5px 14px 5px;
-            background: #fff;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.07);
-            transition: box-shadow 0.2s;
-            display: flex;
-            flex-direction: column;
-            align-items: left;
-            box-sizing: border-box;
-        }
-        .recipe-card p {
-            margin: 0;
-            font-size: 1em;
-            color: #444;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            display: -webkit-box;
-            -webkit-box-orient: vertical;
-            -webkit-line-clamp: 3;
-            line-clamp: 3;
-            white-space: normal;
-            line-height: 1.3em;         /* Set explicit line height */
-            min-height: 3.9em;          /* 3 lines × 1.3em */
-            max-height: 3.9em;
-        }
-        .recipe-card h3 {
-            margin: 10px 0 8px 0;
+        .recipe-list a:hover { background: #fafafa; }
+        .recipe-title { font-weight: bold; }
+        .recipe-desc { color: #666; font-size: 0.9em; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .recipe-meta { color: #999; font-size: 0.85em; margin-top: 2px; }
+        .group-header {
+            margin-top: 24px;
+            padding: 6px 4px;
             font-size: 1.1em;
             font-weight: bold;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;           /* Only one line */
-        }
-        .recipe-card:hover {
-            box-shadow: 0 8px 24px rgba(0,0,0,0.13);
-        }
-        img { width: 100%; border-radius: 5px; }
-        .tag-label { margin-right: 10px; }
-        .image-square {
-            width: 100%; 
-            aspect-ratio: 1/1;        /* Or 1/1 for square, or 16/10, etc. */
-            overflow: hidden;
-            border-radius: 4px;
-            margin: 0 auto 6px auto; 
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #eee;
-        }
-        .image-square img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            object-position: center;
-            display: block;
-            background: #eee;
+            color: #333;
+            border-bottom: 2px solid #ddd;
         }
     </style>
 </head>
 <body>
     <div>
-            <h1>Nils's Cookbook</h1>
-            <a href="{{ url_for('new_recipe') }}" style="display:inline-block; margin-bottom:20px; padding:10px 20px; background:#4CAF50; color:white; border-radius:5px; text-decoration:none;">➕ New Recipe</a>
-            <a href="{{ url_for('ingredient_library') }}" style="margin-right:16px;">📚 Ingredient Library</a>
-            <a href="{{ url_for('shopping_list') }}">🛒 Inköpslista</a>
-            <form method="get" class="filter-container">
+        <h1>Nils's Cookbook</h1>
+        <a href="{{ url_for('new_recipe') }}" style="display:inline-block; margin-bottom:20px; padding:10px 20px; background:#4CAF50; color:white; border-radius:5px; text-decoration:none;">➕ New Recipe</a>
+        <a href="{{ url_for('ingredient_library') }}" style="margin-right:16px;">📚 Ingredient Library</a>
+        <a href="{{ url_for('shopping_list') }}">🛒 Inköpslista</a>
+
+        <form method="get" class="toolbar">
+            <div class="group-tile">
+                <label for="group_by">Gruppera efter:</label>
+                <select name="group_by" id="group_by" onchange="this.form.submit()">
+                    <option value="none"    {% if group_by == 'none'    %}selected{% endif %}>Ingen</option>
+                    <option value="kitchen" {% if group_by == 'kitchen' %}selected{% endif %}>Kök</option>
+                    <option value="type"    {% if group_by == 'type'    %}selected{% endif %}>Typ</option>
+                </select>
+            </div>
+
+            <div>
                 <label for="ingredients">Filter by ingredient:</label>
                 <select name="ingredients" id="ingredients" multiple="multiple" style="min-width:250px;">
                     {% for ing in all_ingredients|selectattr('name')|sort(attribute='name') %}
                         <option value="{{ ing['id'] }}" {% if ing['id'] in selected_ingredients %}selected{% endif %}>{{ ing['name'] }}</option>
                     {% endfor %}
                 </select>
-                <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    $('#ingredients').select2({
-                        placeholder: "Select ingredients",
-                        allowClear: true,
-                        width: 'resolve'
-                    });
-                });
-                </script>
                 <button type="submit">Filter</button>
-            </form>
-            <div style="margin-top: 20px;">
-                <button type="button" id="toggle-advanced-search" style="margin-bottom: 10px;">
-                    Advanced Search
-                </button>
-                <div id="advanced-search-box" style="display: none; border: 1px solid #ccc; padding: 16px; border-radius: 8px; background: #fafafa;">
-                    <form method="post" action="{{ url_for('index') }}">
-                        <label for="sql_query"><strong>Custom SQL Query:</strong></label><br>
-                        <textarea id="sql_query" name="sql_query" rows="8" style="width: 100%;">{{ advanced_sql or default_sql_query }}</textarea>
-                        <button type="submit">Run Query</button>
-                    </form>
-                    {% if error %}
-                        <p style="color: red;">{{ error }}</p>
-                    {% endif %}
-                </div>
             </div>
             <script>
             document.addEventListener('DOMContentLoaded', function() {
-                const btn = document.getElementById('toggle-advanced-search');
-                const box = document.getElementById('advanced-search-box');
-                btn.addEventListener('click', function() {
-                    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+                $('#ingredients').select2({
+                    placeholder: "Select ingredients",
+                    allowClear: true,
+                    width: 'resolve'
                 });
             });
             </script>
-            <div class="recipe-grid">
-                {% for recipe in recipes %}
-                <a href="/recipe/{{ recipe['id'] }}">
-                    <div class="recipe-card">
-                        <h3>{{ recipe['title'] }}</h3>
-                        <div class="image-square">
-                            <img src="{{ recipe['image_url'] if recipe['image_url'] else url_for('static', filename='uploads/placeholder.jpeg') }}" alt="Image of {{ recipe['title'] }}">
-                        </div>
-                        <p>{{ recipe['description'] }}</p>
-                    </div>
-                </a>
-                {% endfor %}
+        </form>
+
+        <div style="margin-top: 12px;">
+            <button type="button" id="toggle-advanced-search" style="margin-bottom: 10px;">
+                Advanced Search
+            </button>
+            <div id="advanced-search-box" style="display: none; border: 1px solid #ccc; padding: 16px; border-radius: 8px; background: #fafafa;">
+                <form method="post" action="{{ url_for('index') }}">
+                    <label for="sql_query"><strong>Custom SQL Query:</strong></label><br>
+                    <textarea id="sql_query" name="sql_query" rows="8" style="width: 100%;">{{ advanced_sql or default_sql_query }}</textarea>
+                    <button type="submit">Run Query</button>
+                </form>
+                {% if error %}
+                    <p style="color: red;">{{ error }}</p>
+                {% endif %}
             </div>
+        </div>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const btn = document.getElementById('toggle-advanced-search');
+            const box = document.getElementById('advanced-search-box');
+            btn.addEventListener('click', function() {
+                box.style.display = box.style.display === 'none' ? 'block' : 'none';
+            });
+        });
+        </script>
+
+        {% macro render_recipe_item(recipe) %}
+            <li>
+                <a href="/recipe/{{ recipe['id'] }}">
+                    <div class="recipe-title">{{ recipe['title'] }}</div>
+                    {% if recipe['description'] %}<div class="recipe-desc">{{ recipe['description'] }}</div>{% endif %}
+                    {% if group_by == 'none' %}
+                    <div class="recipe-meta">
+                        {% if recipe['kitchen'] %}{{ recipe['kitchen'] }}{% endif %}
+                        {% if recipe['kitchen'] and recipe['type'] %} · {% endif %}
+                        {% if recipe['type'] %}{{ recipe['type'] }}{% endif %}
+                    </div>
+                    {% endif %}
+                </a>
+            </li>
+        {% endmacro %}
+
+        {% if grouped %}
+            {% for group_name, items in grouped %}
+                <div class="group-header">{{ group_name }} <span style="font-weight:normal; color:#999;">({{ items|length }})</span></div>
+                <ul class="recipe-list">
+                    {% for recipe in items %}{{ render_recipe_item(recipe) }}{% endfor %}
+                </ul>
+            {% endfor %}
+        {% else %}
+            <ul class="recipe-list">
+                {% for recipe in recipes %}{{ render_recipe_item(recipe) }}{% endfor %}
+            </ul>
+        {% endif %}
     </div>
 </body>
 </html>

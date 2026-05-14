@@ -36,34 +36,31 @@
 <body>
     <div class="main-layout">
         <div class="main-content">
-            <h1>Edit Recipe</h1>
-            <form method="post" enctype="multipart/form-data">
+            <h1>{% if is_new %}Nytt recept{% else %}Edit Recipe{% endif %}</h1>
+            <form method="post">
                 <label>Title:
                     <input type="text" name="title" value="{{ recipe['title'] }}" required>
                 </label>
                 <label>Description:
-                    <textarea name="description" required>{{ recipe['description'] }}</textarea>
+                    <textarea name="description">{{ recipe['description'] }}</textarea>
                 </label>
                 <label>Ingredients:
-                    <textarea name="ingredients" required>{{ ingredients_text }}</textarea>
+                    <textarea name="ingredients">{{ ingredients_text }}</textarea>
                 </label>
                 <label>Instructions:
-                    <textarea name="instructions" required>{{ recipe['instructions'] }}</textarea>
+                    <textarea name="instructions">{{ recipe['instructions'] }}</textarea>
                 </label>
-                <label>Menu:
-                    <textarea name="menu" required>{{ recipe['menu'] }}</textarea>
+                <label>Kök (kitchen):
+                    <input type="text" name="kitchen" value="{{ recipe['kitchen'] }}" placeholder="t.ex. Italienskt, Mexikanskt, Svenskt">
                 </label>
-                <label>Section:
-                    <textarea name="section" required>{{ recipe['section'] }}</textarea>
+                <label>Typ (type):
+                    <input type="text" name="type" value="{{ recipe['type'] }}" placeholder="förrätt, huvudrätt, sidorätt, komponent, efterrätt, …">
                 </label>
                 <label>Tags:
                     <input type="text" name="tags" value="{{ recipe['tags'] }}">
                 </label>
                 <label>Notes:
                     <textarea name="notes">{{ recipe['notes'] }}</textarea>
-                </label>
-                <label>Upload Image:
-                    <input type="file" name="image_file" accept="image/*">
                 </label>
                 <div class="actions">
                     <button type="submit">Save</button>

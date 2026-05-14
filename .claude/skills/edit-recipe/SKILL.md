@@ -59,7 +59,7 @@ Verifiera att variablerna är satta innan första API-anropet:
 
 | Endpoint | Metod | Vad den gör |
 |---|---|---|
-| `/api/recipe/search?q=<text>` | GET | Sök recept på titel (substring, case-insensitive). Returnerar `{results: [{id, title, section, menu}]}`. |
+| `/api/recipe/search?q=<text>` | GET | Sök recept på titel (substring, case-insensitive). Returnerar `{results: [{id, title, type, kitchen}]}`. |
 | `/api/recipe/<id>` | GET | Full receptdata + `current_version_number` + ingredienser. |
 | `/api/recipe/<id>/commit-edit` | POST | Skriv ny version. Body se nedan. |
 
@@ -76,8 +76,8 @@ Alla anrop kräver `Authorization: Bearer $RECIPE_API_TOKEN`.
   "instructions": "1. ...\n2. ...",
   "notes": "...",
   "tags": "...",
-  "section": "...",
-  "menu": "...",
+  "type": "...",
+  "kitchen": "...",
   "ingredients": [
     {
       "name": "ris-nudlar",
@@ -94,7 +94,6 @@ Alla anrop kräver `Authorization: Bearer $RECIPE_API_TOKEN`.
 - `change_note` är **obligatorisk** (står i version-historiken).
 - `expected_version_number` = `current_version_number` du fick från GET. API:et returnerar 409 om någon annan editerade i mellantiden (t.ex. via webb-UI).
 - Övriga fält är **valfria** — utelämnar du ett fält behåller API:et nuvarande värde. För `ingredients`: utelämna helt om du inte ändrar några; skickar du den ersätter den hela ingredienslistan.
-- `image_url` ändras inte via det här flödet — låt fältet vara orört.
 
 ### Svar
 

@@ -54,7 +54,7 @@
     {% else %}
 
     {# Text fields #}
-    {% set field_labels = {'title': 'Titel', 'description': 'Beskrivning', 'instructions': 'Instruktioner', 'notes': 'Anteckningar', 'tags': 'Taggar', 'section': 'Sektion', 'menu': 'Meny'} %}
+    {% set field_labels = {'title': 'Titel', 'description': 'Beskrivning', 'instructions': 'Instruktioner', 'notes': 'Anteckningar', 'tags': 'Taggar', 'type': 'Typ', 'kitchen': 'Kök'} %}
     {% for field, lines in field_diffs.items() %}
     <div class="field-block">
         <div class="field-label">{{ field_labels.get(field, field) }}</div>

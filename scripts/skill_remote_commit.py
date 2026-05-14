@@ -60,11 +60,11 @@ try:
             "SELECT COALESCE(MAX(id), 0) + 1 FROM recipe"
         ).fetchone()[0]
         cur.execute('''
-            INSERT INTO recipe (id, title, description, instructions, notes, image_url, tags, section, menu)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO recipe (id, title, description, instructions, notes, tags, type, kitchen)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (recipe_id, commit.get('title'), commit.get('description'), commit.get('instructions'),
-              commit.get('notes'), commit.get('image_url'), commit.get('tags'),
-              commit.get('section'), commit.get('menu')))
+              commit.get('notes'), commit.get('tags'),
+              commit.get('type'), commit.get('kitchen')))
 
         for ing in commit.get('ingredients', []):
             ing_id = upsert_ingredient(ing)
@@ -77,11 +77,11 @@ try:
         ings_json = json.dumps([dict(r) for r in read_ings(recipe_id)], ensure_ascii=False)
         cur.execute('''
             INSERT INTO recipe_version (recipe_id, version_number, title, description, instructions,
-                notes, image_url, tags, section, menu, ingredients_json, changed_at, changed_by, change_note)
-            VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'chat', 'Skapat via chat')
+                notes, tags, type, kitchen, ingredients_json, changed_at, changed_by, change_note)
+            VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'chat', 'Skapat via chat')
         ''', (recipe_id, commit.get('title'), commit.get('description'), commit.get('instructions'),
-              commit.get('notes'), commit.get('image_url'), commit.get('tags'),
-              commit.get('section'), commit.get('menu'), ings_json, now))
+              commit.get('notes'), commit.get('tags'),
+              commit.get('type'), commit.get('kitchen'), ings_json, now))
         version_number = 1
 
     elif op == 'update':
@@ -97,28 +97,27 @@ try:
 
         cur.execute('''
             INSERT INTO recipe_version (recipe_id, version_number, title, description, instructions,
-                notes, image_url, tags, section, menu, ingredients_json, changed_at, changed_by, change_note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'chat', ?)
+                notes, tags, type, kitchen, ingredients_json, changed_at, changed_by, change_note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'chat', ?)
         ''', (recipe_id, next_ver,
               cur_recipe['title'], cur_recipe['description'], cur_recipe['instructions'],
-              cur_recipe['notes'], cur_recipe['image_url'], cur_recipe['tags'],
-              cur_recipe['section'], cur_recipe['menu'],
+              cur_recipe['notes'], cur_recipe['tags'],
+              cur_recipe['type'], cur_recipe['kitchen'],
               json.dumps([dict(r) for r in cur_ings], ensure_ascii=False),
               now, commit.get('change_note', 'Uppdaterat via chat')))
         version_number = next_ver
 
         cur.execute('''
             UPDATE recipe SET title=?, description=?, instructions=?, notes=?,
-                image_url=?, tags=?, section=?, menu=? WHERE id=?
+                tags=?, type=?, kitchen=? WHERE id=?
         ''', (
             commit.get('title', cur_recipe['title']),
             commit.get('description', cur_recipe['description']),
             commit.get('instructions', cur_recipe['instructions']),
             commit.get('notes', cur_recipe['notes']),
-            commit.get('image_url', cur_recipe['image_url']),
             commit.get('tags', cur_recipe['tags']),
-            commit.get('section', cur_recipe['section']),
-            commit.get('menu', cur_recipe['menu']),
+            commit.get('type', cur_recipe['type']),
+            commit.get('kitchen', cur_recipe['kitchen']),
             recipe_id
         ))
 
