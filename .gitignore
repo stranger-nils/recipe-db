@@ -4,6 +4,7 @@ dev.db
 recipe.db
 recipe.db-journal
 recipe.db.bak.*
+recipe.db.before-*
 recipe.skill
 venv/
 __pycache__/
@@ -12,6 +13,7 @@ scripts/download_and_remap_images.py
 static/uploads/
 flask_session/
 data/backups/
+data/uploads/
 
 # Cowork / Claude Code working files
 .claude/ssh/
