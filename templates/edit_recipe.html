@@ -1,82 +1,337 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="sv">
 <head>
     <meta charset="UTF-8">
-    <title>Edit Recipe</title>
+    <title>{% if is_new %}Nytt recept{% else %}Redigera: {{ recipe['title'] }}{% endif %}</title>
     <style>
+        :root {
+            --bg: #f5f5f5;
+            --card: #fff;
+            --border: #e3e3e3;
+            --border-strong: #c8c8c8;
+            --text: #222;
+            --muted: #666;
+            --accent: #2b6cb0;
+            --accent-soft: #e7f0fa;
+            --danger: #c33;
+        }
+        * { box-sizing: border-box; }
         body {
-        font-family: Arial;
-        margin: 0;
-        padding: 0;
-        min-height: 100vh;
-        display: flex;
-        justify-content: center;
-        background: #fafafa;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.45;
         }
-        .main-layout {
+        .page {
+            max-width: 880px;
+            margin: 0 auto;
+            padding: 24px 20px 80px;
+        }
+        .topbar {
             display: flex;
-            gap: 40px;
-            width: 100vw;
-            justify-content: center;
-            position: relative;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
         }
-        .main-content {
-            flex: 2;
-            max-width: 1000px;
+        .topbar a { color: var(--muted); text-decoration: none; font-size: 14px; }
+        .topbar a:hover { color: var(--accent); }
+        h1 {
+            margin: 0 0 24px;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 18px;
+        }
+        .card h2 {
+            margin: 0 0 14px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--muted);
+        }
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+        .field { margin-bottom: 16px; }
+        .field:last-child { margin-bottom: 0; }
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 600px) {
+            .row { grid-template-columns: 1fr; }
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 9px 11px;
+            border: 1px solid var(--border-strong);
+            border-radius: 6px;
+            font-size: 15px;
+            font-family: inherit;
             background: #fff;
-            padding: 20px;
-            box-sizing: border-box;
+            color: var(--text);
         }
-        label { display: block; margin-top: 15px; }
-        input, textarea { width: 100%; padding: 8px; margin-top: 5px; }
-        .actions { margin-top: 20px; }
-        .actions button, .actions a { margin-right: 10px; }
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(43, 108, 176, 0.15);
+        }
+        textarea { resize: vertical; }
+        textarea.tall { min-height: 280px; }
+        textarea.medium { min-height: 140px; }
+        textarea.short { min-height: 80px; }
+        .hint {
+            display: block;
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .chips {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .chip {
+            display: inline-block;
+            padding: 4px 10px;
+            background: #eef0f3;
+            color: #333;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            font-size: 12px;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.1s;
+        }
+        .chip:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+        .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-top: 24px;
+            position: sticky;
+            bottom: 0;
+            background: linear-gradient(to top, var(--bg) 60%, rgba(245,245,245,0));
+            padding: 16px 0 8px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            border: 1px solid transparent;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover { background: #245a93; }
+        .btn-secondary {
+            background: #fff;
+            color: var(--text);
+            border-color: var(--border-strong);
+        }
+        .btn-secondary:hover { background: #f0f0f0; }
+        .error {
+            background: #fdecea;
+            border: 1px solid #f5b3ad;
+            color: #8b1e16;
+            padding: 12px 14px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
-    <div class="main-layout">
-        <div class="main-content">
-            <h1>{% if is_new %}Nytt recept{% else %}Edit Recipe{% endif %}</h1>
-            {% if error %}
-            <div style="background: #fdd; border: 1px solid #c33; padding: 10px; margin: 10px 0; border-radius: 4px;">
-                <strong>Fel:</strong> {{ error }}
-            </div>
-            {% endif %}
-            <form method="post">
-                <label>Title:
-                    <input type="text" name="title" value="{{ recipe['title'] }}" required>
-                </label>
-                <label>Description:
-                    <textarea name="description">{{ recipe['description'] }}</textarea>
-                </label>
-                <label>Ingredients:
-                    <textarea name="ingredients">{{ ingredients_text }}</textarea>
-                </label>
-                <label>Instructions:
-                    <textarea name="instructions">{{ recipe['instructions'] }}</textarea>
-                </label>
-                <label>Kök (kitchen):
-                    <input type="text" name="kitchen" value="{{ recipe['kitchen'] }}" placeholder="t.ex. Italienskt, Mexikanskt, Svenskt">
-                </label>
-                <label>Typ (type):
-                    <input type="text" name="type" value="{{ recipe['type'] }}" placeholder="förrätt, huvudrätt, sidorätt, komponent, efterrätt, …">
-                </label>
-                <label>Tags:
-                    <input type="text" name="tags" value="{{ recipe['tags'] }}">
-                </label>
-                <label>Notes:
-                    <textarea name="notes">{{ recipe['notes'] }}</textarea>
-                </label>
-                <div class="actions">
-                    <button type="submit">Save</button>
-                    {% if is_new %}
-                        <a href="{{ url_for('index') }}">Discard</a>
-                    {% else %}
-                        <a href="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}">Discard</a>
-                    {% endif %}
-                </div>
-            </form>
-        </div>
+<div class="page">
+    <div class="topbar">
+        {% if is_new %}
+            <a href="{{ url_for('index') }}">← Tillbaka till galleriet</a>
+        {% else %}
+            <a href="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}">← Tillbaka till receptet</a>
+        {% endif %}
     </div>
+
+    <h1>{% if is_new %}Nytt recept{% else %}Redigera recept{% endif %}</h1>
+
+    {% if error %}
+        <div class="error"><strong>Fel:</strong> {{ error }}</div>
+    {% endif %}
+
+    {% set options = options or {'kitchens': [], 'types': [], 'tags': []} %}
+    <form method="post" id="recipe-form">
+        <div class="card">
+            <h2>Grundinfo</h2>
+            <div class="field">
+                <label for="title">Titel</label>
+                <input type="text" id="title" name="title" value="{{ recipe['title'] }}" required autofocus>
+            </div>
+            <div class="field">
+                <label for="description">Beskrivning</label>
+                <textarea id="description" name="description" class="short" placeholder="Kort introduktion eller bakgrund">{{ recipe['description'] }}</textarea>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Ingredienser</h2>
+            <div class="field">
+                <label for="ingredients">En per rad: <code>mängd enhet namn</code></label>
+                <textarea id="ingredients" name="ingredients" class="medium" placeholder="200 g spaghetti&#10;2 st ägg&#10;50 g pecorino">{{ ingredients_text }}</textarea>
+                <span class="hint">Namnet måste matcha katalogen (eller alias). Saknas en ingrediens — lägg till den i <a href="{{ url_for('ingredient_library') }}">ingredienskatalogen</a> först.</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Instruktioner</h2>
+            <div class="field">
+                <label for="instructions">Steg-för-steg</label>
+                <textarea id="instructions" name="instructions" class="tall" placeholder="1. Koka upp rikligt med saltat vatten…">{{ recipe['instructions'] }}</textarea>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Kategorisering</h2>
+            <div class="row">
+                <div class="field">
+                    <label for="kitchen">Kök</label>
+                    <input type="text" id="kitchen" name="kitchen" value="{{ recipe['kitchen'] }}"
+                           list="kitchen-options" autocomplete="off"
+                           placeholder="t.ex. Italienskt, Mexikanskt">
+                    <datalist id="kitchen-options">
+                        {% for k in options.kitchens %}<option value="{{ k }}">{% endfor %}
+                    </datalist>
+                    {% if options.kitchens %}
+                    <div class="chips" data-target="kitchen" data-mode="single">
+                        {% for k in options.kitchens %}
+                            <span class="chip" data-value="{{ k }}">{{ k }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <span class="hint">Välj från listan eller skriv ett nytt kök.</span>
+                </div>
+                <div class="field">
+                    <label for="type">Typ</label>
+                    <input type="text" id="type" name="type" value="{{ recipe['type'] }}"
+                           list="type-options" autocomplete="off"
+                           placeholder="förrätt, huvudrätt, sidorätt…">
+                    <datalist id="type-options">
+                        {% for t in options.types %}<option value="{{ t }}">{% endfor %}
+                    </datalist>
+                    {% if options.types %}
+                    <div class="chips" data-target="type" data-mode="single">
+                        {% for t in options.types %}
+                            <span class="chip" data-value="{{ t }}">{{ t }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <span class="hint">Välj från listan eller skriv en ny typ.</span>
+                </div>
+            </div>
+            <div class="field" style="margin-top: 16px;">
+                <label for="tags">Taggar</label>
+                <input type="text" id="tags" name="tags" value="{{ recipe['tags'] }}"
+                       autocomplete="off" placeholder="kommaseparerat — t.ex. snabbt, vegetariskt">
+                {% if options.tags %}
+                <div class="chips" data-target="tags" data-mode="multi">
+                    {% for t in options.tags %}
+                        <span class="chip" data-value="{{ t }}">{{ t }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <span class="hint">Klicka på en tagg för att lägga till / ta bort. Du kan också skriva nya direkt i fältet.</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Anteckningar</h2>
+            <div class="field">
+                <label for="notes">Egna anteckningar (visas på receptsidan)</label>
+                <textarea id="notes" name="notes" class="medium" placeholder="Variationer, tips, vad som funkade förra gången…">{{ recipe['notes'] }}</textarea>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="btn btn-primary">💾 Spara</button>
+            {% if is_new %}
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">Avbryt</a>
+            {% else %}
+                <a href="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}" class="btn btn-secondary">Avbryt</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<script>
+(function () {
+    function splitTags(value) {
+        return value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+    function joinTags(arr) { return arr.join(', '); }
+
+    function syncChips(input, container) {
+        var mode = container.getAttribute('data-mode');
+        var chips = container.querySelectorAll('.chip');
+        if (mode === 'multi') {
+            var current = splitTags(input.value).map(function (s) { return s.toLowerCase(); });
+            chips.forEach(function (chip) {
+                var v = chip.getAttribute('data-value').toLowerCase();
+                chip.classList.toggle('active', current.indexOf(v) !== -1);
+            });
+        } else {
+            var cur = (input.value || '').trim().toLowerCase();
+            chips.forEach(function (chip) {
+                var v = chip.getAttribute('data-value').toLowerCase();
+                chip.classList.toggle('active', cur === v);
+            });
+        }
+    }
+
+    document.querySelectorAll('.chips').forEach(function (container) {
+        var targetId = container.getAttribute('data-target');
+        var input = document.getElementById(targetId);
+        if (!input) return;
+        var mode = container.getAttribute('data-mode');
+
+        syncChips(input, container);
+        input.addEventListener('input', function () { syncChips(input, container); });
+
+        container.addEventListener('click', function (e) {
+            var chip = e.target.closest('.chip');
+            if (!chip) return;
+            var value = chip.getAttribute('data-value');
+            if (mode === 'multi') {
+                var arr = splitTags(input.value);
+                var lower = arr.map(function (s) { return s.toLowerCase(); });
+                var idx = lower.indexOf(value.toLowerCase());
+                if (idx === -1) arr.push(value); else arr.splice(idx, 1);
+                input.value = joinTags(arr);
+            } else {
+                if (input.value.trim().toLowerCase() === value.toLowerCase()) {
+                    input.value = '';
+                } else {
+                    input.value = value;
+                }
+            }
+            syncChips(input, container);
+            input.dispatchEvent(new Event('change'));
+        });
+    });
+})();
+</script>
 </body>
 </html>

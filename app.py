@@ -380,6 +380,33 @@ def recipe_detail(recipe_id):
         '''), {'id': recipe_id}).mappings().all()
     return render_template('recipe_detail.html', recipe=recipe, ingredients=ingredients)
 
+def _category_options(conn):
+    """Distinct existing values for the categorical fields shown in the edit
+    form, used to populate <datalist> autocompletes. Free text is still
+    allowed — these are suggestions, not constraints."""
+    kitchens = [r[0] for r in conn.execute(text(
+        "SELECT DISTINCT kitchen FROM recipe "
+        "WHERE kitchen IS NOT NULL AND TRIM(kitchen) != '' "
+        "ORDER BY kitchen COLLATE NOCASE"
+    )).all()]
+    types = [r[0] for r in conn.execute(text(
+        "SELECT DISTINCT type FROM recipe "
+        "WHERE type IS NOT NULL AND TRIM(type) != '' "
+        "ORDER BY type COLLATE NOCASE"
+    )).all()]
+    raw_tags = [r[0] for r in conn.execute(text(
+        "SELECT tags FROM recipe WHERE tags IS NOT NULL AND TRIM(tags) != ''"
+    )).all()]
+    tag_set = set()
+    for raw in raw_tags:
+        for t in raw.split(','):
+            t = t.strip()
+            if t:
+                tag_set.add(t)
+    tags = sorted(tag_set, key=lambda s: s.lower())
+    return {'kitchens': kitchens, 'types': types, 'tags': tags}
+
+
 def _parse_ingredients_textarea(raw):
     """Parse the legacy 'amount unit name' line-by-line textarea into structured rows."""
     rows = []
@@ -432,6 +459,7 @@ def edit_recipe(recipe_id):
                     ingredients_text=request.form['ingredients'],
                     is_new=False,
                     error=str(e),
+                    options=_category_options(conn),
                 ), 400
 
             return redirect(url_for('recipe_detail', recipe_id=recipe_id))
@@ -451,7 +479,8 @@ def edit_recipe(recipe_id):
                 'edit_recipe.html',
                 recipe=recipe,
                 ingredients_text=ingredients_text,
-                is_new=False
+                is_new=False,
+                options=_category_options(conn),
             )
 
 @app.route('/recipe/new/edit', methods=['GET', 'POST'])
@@ -527,10 +556,12 @@ def new_recipe():
                 'instructions': instructions, 'notes': notes,
                 'tags': tags, 'type': type_, 'kitchen': kitchen,
             }
+            with engine.connect() as conn:
+                opts = _category_options(conn)
             return render_template(
                 'edit_recipe.html', recipe=empty_recipe,
                 ingredients_text=ingredients_text, is_new=True,
-                error=str(e),
+                error=str(e), options=opts,
             ), 400
 
         return redirect(url_for('recipe_detail', recipe_id=recipe_id))
@@ -539,8 +570,11 @@ def new_recipe():
             'id': None, 'title': '', 'description': '', 'instructions': '',
             'notes': '', 'tags': '', 'type': '', 'kitchen': '',
         }
+        with engine.connect() as conn:
+            opts = _category_options(conn)
         return render_template('edit_recipe.html', recipe=empty_recipe,
-                               ingredients_text='', is_new=True)
+                               ingredients_text='', is_new=True,
+                               options=opts)
 
 @app.route('/recipe/<int:recipe_id>/delete', methods=['POST'])
 def delete_recipe(recipe_id):
