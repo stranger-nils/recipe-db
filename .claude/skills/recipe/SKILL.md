@@ -34,6 +34,15 @@ ssh -o ConnectTimeout=5 -o BatchMode=yes minvps 'echo ok' 2>/dev/null
 
 Kommunicera tydligt med användaren i början av en arbetsflödes-sekvens vilket läge som är aktivt, särskilt vid push ("sparad direkt till VPS" vs "sparad som pending commit — växla till Claude Code för att applicera").
 
+## ⚠️ Vanliga fallgropar — läs INNAN du skriver pending-commit
+
+1. **Fältnamn i pending-commit JSON är `type` och `kitchen`** — INTE `section`/`menu`. Det gamla schemat döptes om i migration 005. Använder du `section`/`menu` kommer recepten sparas med NULL i kategorisering.
+2. **Varje ingrediens MÅSTE ha `default_unit`** i JSON (inte bara `unit`). `ingredient.default_unit` är NOT NULL i DB:n — saknas det rejectas inserten för alla *nya* ingredienser.
+3. **`kitchen` är ren text utan emoji.** Skriv `"Mexikanskt"`, inte `"🌮 Mexikanskt"`.
+4. **`type` är ett av**: `förrätt`, `huvudrätt`, `sidorätt`, `komponent`, `efterrätt`. Inte fritext som `"Tacos"` eller `"Salsa"` (det hör hemma i `tags`).
+
+Se det fullständiga JSON-schemat längre ner — kopiera från det, inte från minnet.
+
 ## Databas
 
 ### Schema

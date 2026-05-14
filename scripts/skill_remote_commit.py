@@ -40,13 +40,12 @@ def upsert_ingredient(ing):
     row = cur.execute("SELECT id FROM ingredient WHERE LOWER(name)=LOWER(?) AND id IS NOT NULL", (name,)).fetchone()
     if row:
         return row[0]
-    # ingredient.id is plain INTEGER (no autoincrement); assign explicitly.
-    new_id = cur.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM ingredient").fetchone()[0]
+    default_unit = ing.get('default_unit') or ing.get('unit') or 'st'
     cur.execute(
-        "INSERT INTO ingredient (id, name, grocery_category, notes, kitchen_staple) VALUES (?, ?, ?, '', ?)",
-        (new_id, name, ing.get('grocery_category', ''), ing.get('kitchen_staple', 0))
+        "INSERT INTO ingredient (name, grocery_category, default_unit, kitchen_staple, aliases) VALUES (?, ?, ?, ?, '[]')",
+        (name, ing.get('grocery_category', ''), default_unit, ing.get('kitchen_staple', 0))
     )
-    return new_id
+    return cur.lastrowid
 
 try:
     cur.execute('BEGIN')
