@@ -3,6 +3,7 @@
 dev.db
 recipe.db
 recipe.db-journal
+recipe.db.bak.*
 recipe.skill
 venv/
 __pycache__/
