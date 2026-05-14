@@ -16,7 +16,12 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e
             cd ${{ secrets.APP_DIR }}
             git pull origin master
+            mkdir -p data/backups
             docker compose up --build -d
             docker image prune -f
+            # Idempotent daily backup cron — replaces any prior backup_db.py line.
+            CRON_LINE="5 3 * * * BACKUP_DIR=${{ secrets.APP_DIR }}/data/backups RECIPE_DB_PATH=${{ secrets.APP_DIR }}/data/recipe.db /usr/bin/python3 ${{ secrets.APP_DIR }}/scripts/backup_db.py daily >> ${{ secrets.APP_DIR }}/data/backups/cron.log 2>&1"
+            ( crontab -l 2>/dev/null | grep -v 'backup_db.py daily' ; echo "$CRON_LINE" ) | crontab -

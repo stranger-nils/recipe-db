@@ -162,6 +162,16 @@ def main():
     commit_b64 = base64.b64encode(raw.encode()).decode()
     vps_script = build_vps_script(commit_b64)
 
+    # Best-effort pre-commit backup on the VPS. Never block the commit on
+    # failure — recipe_version captures per-row history; this is defense in depth.
+    subprocess.run(
+        ['ssh', VPS,
+         'BACKUP_DIR=/opt/recipe-db/backups '
+         'RECIPE_DB_PATH=/opt/recipe-db/data/recipe.db '
+         'python3 /opt/recipe-db/scripts/backup_db.py pre-edit --note=new-recipe'],
+        capture_output=True, timeout=30,
+    )
+
     result = subprocess.run(
         ['ssh', VPS, 'python3', '-'],
         input=vps_script.encode(),

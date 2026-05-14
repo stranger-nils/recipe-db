@@ -3,6 +3,8 @@ import os
 import json
 import difflib
 import hmac
+import subprocess
+import sys
 from datetime import datetime, timezone
 from flask import Flask, request, render_template, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename
@@ -30,6 +32,23 @@ def allowed_file(filename):
 #      and bind-mounted from /opt/recipe-db/data/recipe.db on the host.
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///recipe.db")
 engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
+
+
+def _backup_before_edit(note: str | None = None) -> None:
+    """Take a pre-edit SQLite snapshot if BACKUP_DIR is configured.
+    No-op on local dev (BACKUP_DIR unset). Failures are logged but never
+    block the edit — backups are defense-in-depth, recipe_version is the
+    authoritative per-row history."""
+    if not os.environ.get("BACKUP_DIR"):
+        return
+    script = os.path.join(os.path.dirname(__file__), "scripts", "backup_db.py")
+    cmd = [sys.executable, script, "pre-edit"]
+    if note:
+        cmd.append(f"--note={note}")
+    try:
+        subprocess.run(cmd, check=True, timeout=30, capture_output=True)
+    except Exception as e:  # noqa: BLE001 — never let backup failure break edits
+        print(f"backup_before_edit failed: {e}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -361,6 +380,7 @@ def edit_recipe(recipe_id):
                 'ingredients': _parse_ingredients_textarea(request.form['ingredients']),
             }
 
+            _backup_before_edit(note=f"web-{recipe_id}")
             try:
                 apply_recipe_edit(
                     conn, recipe_id, new_state,
@@ -717,6 +737,7 @@ def api_recipe_commit_edit(recipe_id):
             if not isinstance(ing, dict) or not (ing.get('name') or '').strip():
                 return jsonify({'error': f'ingredients[{i}] must have a non-empty name'}), 400
 
+    _backup_before_edit(note=f"api-{recipe_id}")
     try:
         with engine.begin() as conn:
             result = apply_recipe_edit(

@@ -7,7 +7,10 @@ services:
     volumes:
       - ./data/recipe.db:/app/recipe.db
       - ./data/uploads:/app/static/uploads
+      - ./data/backups:/app/backups
     env_file:
       - .env
     environment:
       - DATABASE_URL=sqlite:///recipe.db
+      - BACKUP_DIR=/app/backups
+      - RECIPE_DB_PATH=/app/recipe.db

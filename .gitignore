@@ -10,6 +10,7 @@ scripts/*.csv
 scripts/download_and_remap_images.py
 static/uploads/
 flask_session/
+data/backups/
 
 # Cowork / Claude Code working files
 .claude/ssh/
