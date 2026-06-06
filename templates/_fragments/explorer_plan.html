@@ -1,0 +1,18 @@
+{# Sidopanel för Planering: receptväljare med kryssrutor. #}
+<div class="exp-head">
+  <span class="exp-title">Välj recept</span>
+  <select class="group-sel" id="plan-grouping">
+    <option value="kok">efter kök</option>
+    <option value="kategori">efter kategori</option>
+    <option value="az">A–Ö</option>
+  </select>
+</div>
+<div class="exp-search">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="M21 21l-4-4"/></svg>
+  <input id="plan-search" placeholder="Sök recept…" autocomplete="off" />
+</div>
+<div class="exp-sub">
+  <div class="exp-mini"><button id="plan-clear">rensa</button></div>
+  <span class="exp-count" id="plan-count">0 valda</span>
+</div>
+<div class="exp-scroll" id="plan-tree"></div>

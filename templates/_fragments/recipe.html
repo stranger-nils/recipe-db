@@ -1,0 +1,107 @@
+{# Serverrenderad receptvy som injiceras i en tab-pane.
+   Förväntade variabler:
+     recipe         : recipe-row (dict-likt)
+     ingredients    : list av {name, amount, unit, note, grocery_category, kitchen_staple}
+     steps          : list av strängar (parsade ur recipe.instructions)
+     versions       : list av {version_number, changed_at, change_note, is_current}
+     active_version : aktuellt version_number (None om "live"-läge)
+     base_servings  : antal portioner som ingrediensmängderna är angivna för
+     annotations    : dict {target_type:target_key: text} #}
+<div class="doc" data-recipe-id="{{ recipe.id }}"
+     data-active-version="{{ active_version or '' }}"
+     data-base-servings="{{ base_servings }}">
+  <div class="breadcrumb">
+    <span>{{ (recipe.kitchen or 'okänt').lower() }}</span>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    <span>{{ recipe.id }}.recept</span>
+    {% if active_version %}<span class="bc-ver">@v{{ active_version }}</span>{% endif %}
+  </div>
+
+  <header class="doc-head">
+    <h1>{{ recipe.title }}</h1>
+    {% if recipe.description %}<p class="doc-desc">{{ recipe.description }}</p>{% endif %}
+    <div class="doc-meta">
+      {% if recipe.kitchen %}<span class="chip">{{ recipe.kitchen }}</span>{% endif %}
+      {% if recipe.type %}<span class="chip">{{ recipe.type }}</span>{% endif %}
+      {% if recipe.tags %}{% for tag in recipe.tags.split(',') %}{% if tag.strip() %}<span class="chip">{{ tag.strip() }}</span>{% endif %}{% endfor %}{% endif %}
+      <span class="chip"><b data-serv-display>{{ base_servings }}</b> port</span>
+    </div>
+  </header>
+
+  <div class="doc-bar">
+    <div class="doc-bar-l">
+      <div class="vpick">
+        <select data-version-picker>
+          <option value="">live (aktuell)</option>
+          {% for v in versions %}
+            <option value="{{ v.version_number }}" {% if active_version == v.version_number %}selected{% endif %}>
+              v{{ v.version_number }}{% if v.is_current %} · aktuell{% endif %} — {{ v.changed_at[:10] }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if versions|length >= 2 %}
+        <button class="btn-ghost" data-open-diff="{{ recipe.id }}">Jämför versioner</button>
+      {% endif %}
+      <a class="btn-ghost" href="/recipe/{{ recipe.id }}/edit">Redigera</a>
+    </div>
+    <div class="stepper" title="Skala receptet (påverkar bara numeriska mängder)">
+      <button data-stepper="-">–</button>
+      <span><b data-stepper-value>{{ base_servings }}</b> port</span>
+      <button data-stepper="+">+</button>
+    </div>
+  </div>
+
+  {% if version_note %}
+    <div class="ver-note">
+      <span class="ver-note-tag">v{{ active_version }}</span>
+      {{ version_note }}
+    </div>
+  {% endif %}
+
+  <section class="block">
+    <h2 class="block-h">Ingredienser</h2>
+    <ul class="ing-list">
+      {% for ing in ingredients %}
+        {% set akey = 'ingredient:' + ing.name %}
+        {% set anno = annotations.get(akey, '') %}
+        <li class="ing-item" data-anno-key="{{ akey }}">
+          <div class="ing-row">
+            <span class="ing-q" data-base-qty="{{ ing.amount or '' }}">{{ ing.amount or '' }}</span>
+            <span class="ing-u">{{ ing.unit or '' }}</span>
+            <span class="ing-n">{{ ing.name }}{% if ing.note %}<span class="ing-note">, {{ ing.note }}</span>{% endif %}{% if ing.kitchen_staple %}<span class="pantry-dot" title="Skafferivara">skafferi</span>{% endif %}</span>
+            <button class="anno-add{% if anno %} has{% endif %}" data-anno-toggle>{% if anno %}redigera{% else %}+ anteckning{% endif %}</button>
+          </div>
+          {% if anno %}<div class="ing-anno" data-anno-display>{{ anno }}</div>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="block">
+    <h2 class="block-h">Tillvägagångssätt</h2>
+    <ol class="step-list">
+      {% for step in steps %}
+        {% set akey = 'step:' + loop.index0|string %}
+        {% set anno = annotations.get(akey, '') %}
+        <li class="step-item" data-anno-key="{{ akey }}">
+          <div class="step-row">
+            <span class="step-num">{{ '%02d' % loop.index }}</span>
+            <div class="step-main">
+              <span class="step-txt">{{ step }}</span>
+              {% if anno %}<div class="step-anno" data-anno-display>{{ anno }}</div>{% endif %}
+            </div>
+            <button class="anno-add{% if anno %} has{% endif %}" data-anno-toggle>{% if anno %}redigera{% else %}+ anteckning{% endif %}</button>
+          </div>
+        </li>
+      {% endfor %}
+    </ol>
+  </section>
+
+  {% if recipe.notes %}
+    <section class="block">
+      <h2 class="block-h">Anteckningar</h2>
+      <p class="doc-desc" style="white-space:pre-wrap;">{{ recipe.notes }}</p>
+    </section>
+  {% endif %}
+</div>

@@ -1,0 +1,61 @@
+{# Ingrediensbibliotek (klient-filtrerar baserat på exp-sökruta + kategori).
+   Variabler: ingredients, allowed_categories, ingredient_recipes (dict id -> [{id,title}]), ingredient_aliases #}
+<div class="lib">
+  <div class="lib-head">
+    <h1>Ingrediensbibliotek</h1>
+  </div>
+  <form method="post" action="/ingredients">
+    <div class="lib-table-wrap">
+      <table class="lib-table" id="lib-table">
+        <thead>
+          <tr>
+            <th>Namn</th>
+            <th>Kategori</th>
+            <th>Default-enhet</th>
+            <th>Alias</th>
+            <th class="c-ids">Används i</th>
+            <th class="c-pan">Skafferi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ing in ingredients %}
+            <tr data-name="{{ ing.name|lower }}" data-cat="{{ ing.grocery_category }}" data-aliases="{{ ingredient_aliases.get(ing.id, '')|lower }}">
+              <td><span class="ing-name">{{ ing.name }}</span></td>
+              <td>
+                <select name="grocery_category_{{ ing.id }}">
+                  {% for c in allowed_categories %}
+                    <option value="{{ c }}" {% if c == ing.grocery_category %}selected{% endif %}>{{ c }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td><input name="default_unit_{{ ing.id }}" value="{{ ing.default_unit }}" /></td>
+              <td><input name="aliases_{{ ing.id }}" value="{{ ingredient_aliases.get(ing.id, '') }}" placeholder="—" /></td>
+              <td class="c-ids">
+                {% set recs = ingredient_recipes.get(ing.id, []) %}
+                {% if recs %}
+                  <span class="recipe-links">
+                    {% for r in recs %}
+                      <button type="button" class="recipe-link" data-open-recipe="{{ r.id }}" title="Öppna {{ r.title }}">{{ r.title }}</button>
+                    {% endfor %}
+                  </span>
+                {% else %}<span class="id-none">–</span>{% endif %}
+              </td>
+              <td class="c-pan">
+                <input type="hidden" name="kitchen_staple_{{ ing.id }}_marker" value="1" />
+                <label>
+                  <input type="checkbox" name="kitchen_staple_{{ ing.id }}" value="on" {% if ing.kitchen_staple %}checked{% endif %} style="display:none;" />
+                  <span class="pan-toggle{% if ing.kitchen_staple %} on{% endif %}" data-pan-toggle>
+                    {% if ing.kitchen_staple %}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>{% endif %}
+                  </span>
+                </label>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="lib-save" style="margin-top:calc(var(--u)*2);">
+      <button class="btn-primary" type="submit">Spara ändringar</button>
+    </div>
+  </form>
+</div>

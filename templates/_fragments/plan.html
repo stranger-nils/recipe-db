@@ -1,0 +1,31 @@
+{# Planeringsvyn (klient-driven från mise-data). #}
+<div class="plan" id="plan-view">
+  <div class="plan-empty" id="plan-empty">
+    <p>Bocka i recept i panelen så listas alla ingredienser för inventering,<br/>innan du genererar en inköpslista att kopiera.</p>
+  </div>
+  <div id="plan-active" hidden>
+    <div class="plan-head">
+      <div>
+        <h1 id="plan-title">Inventering</h1>
+        <p class="plan-sub" id="plan-subtitle"></p>
+      </div>
+      <div class="plan-actions" id="plan-actions"></div>
+    </div>
+    <div class="plan-steps">
+      <button class="plan-step active" data-plan-step="inventory">
+        <span class="ps-n">1</span> Inventering
+      </button>
+      <span class="ps-sep"></span>
+      <button class="plan-step" data-plan-step="list" disabled>
+        <span class="ps-n">2</span> Inköpslista
+      </button>
+    </div>
+    <div class="plan-chips" id="plan-chips"></div>
+    <p class="plan-instr" id="plan-instr">Bocka i det du redan har hemma — skafferivaror är förbockade. Resten hamnar på inköpslistan.</p>
+    <div class="plan-list" id="plan-list"></div>
+    <div class="plan-foot" id="plan-foot">
+      <button class="btn-primary" id="plan-create">Skapa inköpslista →</button>
+      <span class="foot-note" id="plan-foot-note"></span>
+    </div>
+  </div>
+</div>
