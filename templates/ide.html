@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>mise — recept-IDE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="{{ url_for('static', filename='mise.css') }}" />
+</head>
+<body class="dens-kompakt">
+<button class="explorer-toggle" id="explorer-toggle" title="Visa/dölj panel">≡</button>
+<div class="ide">
+
+  {# ---- Aktivitetsrad ---- #}
+  <nav class="rail">
+    <div class="rail-items">
+      <button class="rail-btn{% if mode == 'recept' %} active{% endif %}" data-mode-link="/" title="Recept">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4zM5 4a2 2 0 0 0 0 4h11M9 12h6"/></svg>
+        <span class="rail-tip">Recept</span>
+      </button>
+      <button class="rail-btn{% if mode == 'ingredienser' %} active{% endif %}" data-mode-link="/ingredients" title="Ingredienser">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h16"/><path d="M7 5v14"/></svg>
+        <span class="rail-tip">Ingredienser</span>
+      </button>
+      <button class="rail-btn{% if mode == 'planering' %} active{% endif %}" data-mode-link="/plan" title="Planering">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zM9 7V5a3 3 0 0 1 6 0v2"/></svg>
+        <span class="rail-tip">Planering</span>
+      </button>
+    </div>
+  </nav>
+
+  {# ---- Explorer ---- #}
+  <aside class="explorer">
+    {% if mode == 'recept' %}
+      {% include '_fragments/explorer_recipes.html' %}
+    {% elif mode == 'ingredienser' %}
+      {% include '_fragments/explorer_library.html' %}
+    {% else %}
+      {% include '_fragments/explorer_plan.html' %}
+    {% endif %}
+  </aside>
+
+  {# ---- Editor ---- #}
+  <main class="editor">
+    <div class="tabstrip" id="tabstrip">
+      {% if mode == 'recept' %}
+        {# fylls av JS från sessionStorage / inledande recipe #}
+      {% elif mode == 'ingredienser' %}
+        <div class="tab active fixed" data-pane="lib"><span class="tab-label">ingrediensbibliotek</span></div>
+      {% else %}
+        <div class="tab active fixed" data-pane="plan"><span class="tab-label">inköpslista</span></div>
+      {% endif %}
+    </div>
+
+    <div class="editor-body" id="editor-body">
+      {% if mode == 'recept' %}
+        <div class="tab-pane active" data-pane="welcome">
+          <div class="welcome">
+            <div class="welcome-mark">mise</div>
+            <p>Öppna ett recept i panelen till vänster, eller tryck <kbd>⌘K</kbd>.</p>
+            <p><a class="btn-ghost" href="/recipe/new/edit">+ nytt recept</a></p>
+          </div>
+        </div>
+      {% elif mode == 'ingredienser' %}
+        <div class="tab-pane active" data-pane="lib">
+          {% include '_fragments/library.html' %}
+        </div>
+      {% else %}
+        <div class="tab-pane active" data-pane="plan">
+          {% include '_fragments/plan.html' %}
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="statusbar">
+      <span class="sb-mode">{{ mode }}</span>
+      <span class="sb-item" id="sb-info"></span>
+      <span class="sb-spacer"></span>
+      <span class="sb-item">⌘K</span>
+    </div>
+  </main>
+</div>
+
+{# ---- Kommandopalett ---- #}
+<div class="cmd-overlay" id="cmd-overlay" hidden>
+  <div class="cmd-box">
+    <div class="cmd-input">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="M21 21l-4-4"/></svg>
+      <input id="cmd-input" placeholder="Öppna recept…" autocomplete="off" />
+      <span class="cmd-esc">esc</span>
+    </div>
+    <div class="cmd-res" id="cmd-res"></div>
+  </div>
+</div>
+
+<script id="mise-data" type="application/json">{{ data_json|safe }}</script>
+<script src="{{ url_for('static', filename='mise.js') }}"></script>
+</body>
+</html>

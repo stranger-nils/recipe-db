@@ -1,0 +1,93 @@
+{# Diff-fragment. Variabler:
+   recipe, versions (alla), v_from, v_to, ver_a, ver_b,
+   ing_rows: [{type:'add'|'del'|'chg'|'same', a:?, b:?}],
+   step_rows: [{type, a, b}], counts: {add, del, chg} #}
+<div class="diff" data-recipe-id="{{ recipe.id }}">
+  <div class="diff-top">
+    <div class="diff-title">
+      <span>{{ recipe.title }}</span>
+      <span class="diff-sub">versionsjämförelse</span>
+    </div>
+    <div class="diff-counts">
+      <span class="dc">+{{ counts.add }} tillagda</span>
+      <span class="dc">−{{ counts.del }} borttagna</span>
+      <span class="dc">~{{ counts.chg }} ändrade</span>
+    </div>
+  </div>
+
+  <div class="diff-cols-h">
+    <div class="diff-col-h">
+      <span class="col-side">vänster</span>
+      <div class="vpick vpick-c"><select data-diff-side="from">
+        {% for v in versions %}
+          <option value="{{ v.version_number }}" {% if v.version_number == v_from %}selected{% endif %}>v{{ v.version_number }} — {{ v.changed_at[:10] }}</option>
+        {% endfor %}
+      </select></div>
+      <span class="col-date">{{ ver_a.changed_at[:10] if ver_a else '' }}</span>
+    </div>
+    <div class="diff-col-h diff-col-hr">
+      <span class="col-side">höger</span>
+      <div class="vpick vpick-c"><select data-diff-side="to">
+        {% for v in versions %}
+          <option value="{{ v.version_number }}" {% if v.version_number == v_to %}selected{% endif %}>v{{ v.version_number }} — {{ v.changed_at[:10] }}</option>
+        {% endfor %}
+      </select></div>
+      <span class="col-date">{{ ver_b.changed_at[:10] if ver_b else '' }}</span>
+    </div>
+  </div>
+
+  <div class="diff-body">
+    {% if (ver_a and ver_a.change_note) or (ver_b and ver_b.change_note) %}
+      <div class="df-pair df-notes">
+        <div class="df-note-cell">{{ ver_a.change_note or '' }}</div>
+        <div class="df-note-cell">{{ ver_b.change_note or '' }}</div>
+      </div>
+    {% endif %}
+
+    <div class="df-section">
+      <div class="df-sec-h">Ingredienser</div>
+      {% for r in ing_rows %}
+        <div class="df-pair">
+          {% set cls_a = 'df-line' %}
+          {% if r.type == 'add' %}{% set cls_a = 'df-line df-empty' %}
+          {% elif r.type == 'del' %}{% set cls_a = 'df-line df-del' %}
+          {% elif r.type == 'chg' %}{% set cls_a = 'df-line df-chg' %}{% endif %}
+          {% set cls_b = 'df-line' %}
+          {% if r.type == 'add' %}{% set cls_b = 'df-line df-add' %}
+          {% elif r.type == 'del' %}{% set cls_b = 'df-line df-empty' %}
+          {% elif r.type == 'chg' %}{% set cls_b = 'df-line df-chg' %}{% endif %}
+          <div class="{{ cls_a }}">
+            <span class="df-mark">{% if r.type == 'del' %}−{% elif r.type == 'chg' %}~{% endif %}</span>
+            <span class="df-text">{% if r.a %}{{ r.a.amount or '' }} {{ r.a.unit or '' }} {{ r.a.name }}{% if r.a.note %}, {{ r.a.note }}{% endif %}{% endif %}</span>
+          </div>
+          <div class="{{ cls_b }}">
+            <span class="df-mark">{% if r.type == 'add' %}+{% elif r.type == 'chg' %}~{% endif %}</span>
+            <span class="df-text">{% if r.b %}{{ r.b.amount or '' }} {{ r.b.unit or '' }} {{ r.b.name }}{% if r.b.note %}, {{ r.b.note }}{% endif %}{% endif %}</span>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="df-section">
+      <div class="df-sec-h">Tillvägagångssätt</div>
+      {% for r in step_rows %}
+        <div class="df-pair">
+          {% set cls_a = 'df-line' %}
+          {% if r.type == 'add' %}{% set cls_a = 'df-line df-empty' %}
+          {% elif r.type == 'del' %}{% set cls_a = 'df-line df-del' %}{% endif %}
+          {% set cls_b = 'df-line' %}
+          {% if r.type == 'add' %}{% set cls_b = 'df-line df-add' %}
+          {% elif r.type == 'del' %}{% set cls_b = 'df-line df-empty' %}{% endif %}
+          <div class="{{ cls_a }}">
+            <span class="df-mark">{% if r.type == 'del' %}−{% endif %}</span>
+            <span class="df-text">{{ r.a or '' }}</span>
+          </div>
+          <div class="{{ cls_b }}">
+            <span class="df-mark">{% if r.type == 'add' %}+{% endif %}</span>
+            <span class="df-text">{{ r.b or '' }}</span>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>

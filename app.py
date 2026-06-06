@@ -282,103 +282,441 @@ default_sql_query = (
 GROUP_BY_OPTIONS = {'none', 'kitchen', 'type'}
 
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
+# ---------------------------------------------------------------------------
+# Mise IDE — shell + view selectors.
+# ---------------------------------------------------------------------------
 
+def _parse_steps(instructions):
+    """Split free-form instruction text into discrete steps.
+    Handles double-newline blocks first (preferred), falls back to single lines.
+    Strips a leading '<n>. ' or '<n>) ' enumeration marker."""
+    import re
+    if not instructions:
+        return []
+    raw = instructions.strip()
+    blocks = [b.strip() for b in re.split(r'\n\s*\n', raw) if b.strip()]
+    if len(blocks) <= 1:
+        blocks = [ln.strip() for ln in raw.split('\n') if ln.strip()]
+    cleaned = []
+    for b in blocks:
+        cleaned.append(re.sub(r'^\s*\d+[.)\]]\s+', '', b))
+    return cleaned
+
+
+def _ide_data(mode):
+    """Build the data blob embedded in ide.html for client-side rendering
+    of the explorer/palette/planning. Kept lean — only fields the JS needs."""
     with engine.connect() as conn:
-        all_ingredients = conn.execute(text('SELECT id, name FROM ingredient ORDER BY name')).mappings().all()
+        recipe_rows = conn.execute(text('''
+            SELECT r.id, r.title, r.kitchen, r.type,
+                   COALESCE((SELECT MAX(version_number) FROM recipe_version v WHERE v.recipe_id=r.id), 0) AS version_count
+            FROM recipe r ORDER BY r.title
+        ''')).mappings().all()
+        catalog = conn.execute(text(
+            'SELECT id, name, grocery_category FROM ingredient ORDER BY name'
+        )).mappings().all()
+    return {
+        'mode': mode,
+        'recipes': [dict(r) for r in recipe_rows],
+        'catalog': [dict(c) for c in catalog],
+    }
 
-        selected_ingredients = request.args.getlist('ingredients', type=int)
-        group_by = request.args.get('group_by', 'none')
-        if group_by not in GROUP_BY_OPTIONS:
-            group_by = 'none'
 
-        advanced_sql = None
-        recipes = []
-        error = None
-
-        if request.method == 'POST' and 'sql_query' in request.form:
-            advanced_sql = request.form['sql_query']
-            try:
-                result = conn.execute(text(advanced_sql))
-                recipes = result.mappings().all()
-            except SQLAlchemyError as e:
-                error = str(e)
-                recipes = []
-        else:
-            if selected_ingredients:
-                placeholders = ','.join(f':id{i}' for i in range(len(selected_ingredients)))
-                query = f'''
-                    SELECT DISTINCT r.*
-                    FROM recipe r
-                    JOIN recipe_ingredient ri ON r.id = ri.recipe_id
-                    WHERE ri.ingredient_id IN ({placeholders})
-                    ORDER BY r.title
-                '''
-                params = {f'id{i}': v for i, v in enumerate(selected_ingredients)}
-                recipes = conn.execute(text(query), params).mappings().all()
-            else:
-                recipes = conn.execute(text('SELECT * FROM recipe ORDER BY title')).mappings().all()
-
-    # Group if requested.
-    grouped = None
-    if group_by in ('kitchen', 'type'):
-        buckets = {}
-        for r in recipes:
-            key = (r[group_by] or '').strip() or '(Ej angiven)'
-            buckets.setdefault(key, []).append(r)
-        grouped = sorted(buckets.items(), key=lambda kv: kv[0].lower())
-
+def _ide_render(mode, **kwargs):
+    data = _ide_data(mode)
     return render_template(
-        'index.html',
-        recipes=recipes,
-        grouped=grouped,
-        group_by=group_by,
-        all_ingredients=all_ingredients,
-        selected_ingredients=selected_ingredients,
-        advanced_sql=advanced_sql,
-        error=error,
-        default_sql_query=default_sql_query
+        'ide.html', mode=mode, data_json=json.dumps(data, ensure_ascii=False),
+        **kwargs,
     )
 
-@app.route('/sql', methods=['GET', 'POST'])
-def sql_sandbox():
-    result = []
-    error = ''
-    query = ''
-    columns = []
 
-    if request.method == 'POST':
-        query = request.form['query']
-        try:
-            with engine.begin() as conn:
-                res = conn.execute(text(query))
-                if query.strip().lower().startswith("select"):
-                    rows = res.mappings().all()
-                    result = [dict(row) for row in rows]
-                    columns = rows[0].keys() if rows else []
-                else:
-                    result = [{"Message": "Query executed successfully."}]
-                    columns = ["Message"]
-        except SQLAlchemyError as e:
-            error = str(e)
-            result = []
-            columns = []
+@app.route('/')
+def ide_home():
+    return _ide_render('recept')
 
-    return render_template('sql.html', result=result, error=error, query=query, columns=columns)
+
+@app.route('/ingredients', methods=['GET', 'POST'])
+@app.route('/ingredient_library', methods=['GET', 'POST'])
+def ingredient_library():
+    with engine.begin() as conn:
+        if request.method == 'POST':
+            ingredient_ids = [
+                row['id'] for row in conn.execute(text(
+                    'SELECT id FROM ingredient'
+                )).mappings().all()
+            ]
+            for ing_id in ingredient_ids:
+                grocery_category = request.form.get(f'grocery_category_{ing_id}', '').strip()
+                default_unit = request.form.get(f'default_unit_{ing_id}', '').strip()
+                aliases_raw = request.form.get(f'aliases_{ing_id}', '').strip()
+                kitchen_staple = 1 if request.form.get(f'kitchen_staple_{ing_id}') == 'on' else 0
+                if grocery_category not in ALLOWED_GROCERY_CATEGORIES:
+                    continue
+                if not default_unit:
+                    continue
+                aliases_list = [a.strip() for a in aliases_raw.split(',') if a.strip()]
+                conn.execute(
+                    text('UPDATE ingredient SET grocery_category=:gc, '
+                         'default_unit=:du, kitchen_staple=:ks, aliases=:al '
+                         'WHERE id=:id'),
+                    {'gc': grocery_category, 'du': default_unit,
+                     'ks': kitchen_staple,
+                     'al': json.dumps(aliases_list, ensure_ascii=False),
+                     'id': ing_id}
+                )
+            return redirect(url_for('ingredient_library'))
+
+        ingredients = conn.execute(text(
+            'SELECT * FROM ingredient ORDER BY name COLLATE NOCASE'
+        )).mappings().all()
+
+        ingredient_recipes = {}
+        ingredient_aliases = {}
+        for ing in ingredients:
+            recipe_rows = conn.execute(text(
+                'SELECT r.id, r.title FROM recipe r '
+                'JOIN recipe_ingredient ri ON ri.recipe_id = r.id '
+                'WHERE ri.ingredient_id=:id ORDER BY r.title'
+            ), {'id': ing['id']}).mappings().all()
+            ingredient_recipes[ing['id']] = [dict(r) for r in recipe_rows]
+            try:
+                aliases = json.loads(ing['aliases'] or '[]')
+            except (TypeError, ValueError):
+                aliases = []
+            ingredient_aliases[ing['id']] = ', '.join(aliases)
+
+    return _ide_render(
+        'ingredienser',
+        ingredients=ingredients,
+        ingredient_recipes=ingredient_recipes,
+        ingredient_aliases=ingredient_aliases,
+        allowed_categories=sorted(ALLOWED_GROCERY_CATEGORIES),
+    )
+
+
+@app.route('/plan', methods=['GET'])
+@app.route('/shopping-list', methods=['GET'])
+def shopping_list_view():
+    return _ide_render('planering')
+
 
 @app.route('/recipe/<int:recipe_id>')
 def recipe_detail(recipe_id):
+    # Den gamla recipe_detail-vyn är ersatt av IDE-fliken. Bevarad route
+    # som omdirigering så befintliga länkar/bookmarks fortsätter funka.
+    return redirect(url_for('ide_home') + f'?open={recipe_id}')
 
-    with engine.connect() as conn:
-        recipe = conn.execute(text('SELECT * FROM recipe WHERE id=:id'), {'id': recipe_id}).mappings().first()
-        ingredients = conn.execute(text('''
-            SELECT i.name, ri.amount, ri.unit, ri.note
+
+# ---------------------------------------------------------------------------
+# Fragment endpoints — server-rendered HTML som JS injicerar i tab-paner.
+# ---------------------------------------------------------------------------
+
+def _load_recipe_for_view(conn, recipe_id, version_number=None):
+    """Returnera (recipe, ingredients_for_view, steps, versions, active_version,
+    version_note, annotations_dict). Om version_number anges hämtas snapshot
+    från recipe_version.ingredients_json; annars live från recipe + recipe_ingredient."""
+    recipe = conn.execute(text('SELECT * FROM recipe WHERE id=:id'), {'id': recipe_id}).mappings().first()
+    if not recipe:
+        return None
+    versions_rows = conn.execute(text('''
+        SELECT version_number, changed_at, change_note FROM recipe_version
+        WHERE recipe_id=:id ORDER BY version_number
+    '''), {'id': recipe_id}).mappings().all()
+    current_version_number = versions_rows[-1]['version_number'] if versions_rows else 0
+    versions = [
+        {
+            'version_number': v['version_number'],
+            'changed_at': v['changed_at'] or '',
+            'change_note': v['change_note'] or '',
+            'is_current': v['version_number'] == current_version_number,
+        }
+        for v in versions_rows
+    ]
+
+    version_note = None
+    if version_number:
+        snap = conn.execute(text('''
+            SELECT title, description, instructions, notes, tags, type, kitchen,
+                   ingredients_json, change_note
+            FROM recipe_version WHERE recipe_id=:rid AND version_number=:v
+        '''), {'rid': recipe_id, 'v': version_number}).mappings().first()
+        if snap:
+            # render the historical snapshot
+            recipe_view = dict(recipe)
+            recipe_view.update({
+                'title': snap['title'], 'description': snap['description'],
+                'instructions': snap['instructions'], 'notes': snap['notes'],
+                'tags': snap['tags'], 'type': snap['type'], 'kitchen': snap['kitchen'],
+            })
+            try:
+                ing_snap = json.loads(snap['ingredients_json'] or '[]')
+            except (TypeError, ValueError):
+                ing_snap = []
+            # Anrika med grocery_category/kitchen_staple från katalogen
+            cat_map = {
+                r['name']: (r['grocery_category'], r['kitchen_staple'])
+                for r in conn.execute(text(
+                    'SELECT name, grocery_category, kitchen_staple FROM ingredient'
+                )).mappings().all()
+            }
+            ingredients = []
+            for ing in ing_snap:
+                name = ing.get('name', '')
+                gc, ks = cat_map.get(name, (None, 0))
+                ingredients.append({
+                    'name': name,
+                    'amount': ing.get('amount', ''),
+                    'unit': ing.get('unit', ''),
+                    'note': ing.get('note', ''),
+                    'grocery_category': gc,
+                    'kitchen_staple': ks,
+                })
+            recipe = recipe_view
+            version_note = snap['change_note'] or None
+        else:
+            version_number = None
+    if not version_number:
+        ing_rows = conn.execute(text('''
+            SELECT i.name, ri.amount, ri.unit, ri.note,
+                   i.grocery_category, i.kitchen_staple
             FROM recipe_ingredient ri
             JOIN ingredient i ON ri.ingredient_id = i.id
             WHERE ri.recipe_id = :id
+            ORDER BY i.grocery_category, i.name
         '''), {'id': recipe_id}).mappings().all()
-    return render_template('recipe_detail.html', recipe=recipe, ingredients=ingredients)
+        ingredients = [dict(r) for r in ing_rows]
+
+    steps = _parse_steps(recipe['instructions'])
+
+    # annotations
+    ann_rows = conn.execute(text('''
+        SELECT target_type, target_key, text FROM recipe_annotation
+        WHERE recipe_id=:id AND version_number=:v
+    '''), {'id': recipe_id, 'v': version_number or 0}).mappings().all()
+    annotations = {f"{a['target_type']}:{a['target_key']}": a['text'] for a in ann_rows}
+
+    return {
+        'recipe': recipe,
+        'ingredients': ingredients,
+        'steps': steps,
+        'versions': versions,
+        'active_version': version_number,
+        'version_note': version_note,
+        'annotations': annotations,
+        'base_servings': 4,
+    }
+
+
+@app.route('/_frag/recipe/<int:recipe_id>')
+def frag_recipe(recipe_id):
+    v = request.args.get('v', type=int)
+    with engine.connect() as conn:
+        data = _load_recipe_for_view(conn, recipe_id, v)
+    if not data:
+        return "Recipe not found", 404
+    return render_template('_fragments/recipe.html', **data)
+
+
+@app.route('/_frag/recipe/<int:recipe_id>/diff')
+def frag_recipe_diff(recipe_id):
+    v_from = request.args.get('from', type=int)
+    v_to = request.args.get('to', type=int)
+    with engine.connect() as conn:
+        recipe = conn.execute(text('SELECT id, title FROM recipe WHERE id=:id'), {'id': recipe_id}).mappings().first()
+        if not recipe:
+            return "Recipe not found", 404
+        versions_rows = conn.execute(text('''
+            SELECT version_number, changed_at, change_note FROM recipe_version
+            WHERE recipe_id=:id ORDER BY version_number
+        '''), {'id': recipe_id}).mappings().all()
+        nums = [v['version_number'] for v in versions_rows]
+        if not nums:
+            return "<div class='welcome'><p>Det finns inga sparade versioner än.</p></div>"
+        if v_to is None:
+            v_to = nums[-1]
+        if v_from is None:
+            v_from = nums[-2] if len(nums) >= 2 else nums[-1]
+        ver_a = conn.execute(text(
+            'SELECT * FROM recipe_version WHERE recipe_id=:rid AND version_number=:v'
+        ), {'rid': recipe_id, 'v': v_from}).mappings().first()
+        ver_b = conn.execute(text(
+            'SELECT * FROM recipe_version WHERE recipe_id=:rid AND version_number=:v'
+        ), {'rid': recipe_id, 'v': v_to}).mappings().first()
+
+    versions = [{'version_number': v['version_number'], 'changed_at': v['changed_at'] or ''} for v in versions_rows]
+
+    try:
+        ings_a_list = json.loads((ver_a or {}).get('ingredients_json') or '[]') if ver_a else []
+        ings_b_list = json.loads((ver_b or {}).get('ingredients_json') or '[]') if ver_b else []
+    except (TypeError, ValueError):
+        ings_a_list, ings_b_list = [], []
+    ings_a = {(i.get('name') or '').lower(): i for i in ings_a_list}
+    ings_b = {(i.get('name') or '').lower(): i for i in ings_b_list}
+    ing_rows = []
+    counts = {'add': 0, 'del': 0, 'chg': 0}
+    seen = set()
+    for ing in ings_a_list:
+        k = (ing.get('name') or '').lower()
+        seen.add(k)
+        if k in ings_b:
+            b = ings_b[k]
+            if (ing.get('amount') != b.get('amount')
+                    or ing.get('unit') != b.get('unit')
+                    or (ing.get('note') or '') != (b.get('note') or '')):
+                ing_rows.append({'type': 'chg', 'a': ing, 'b': b})
+                counts['chg'] += 1
+            else:
+                ing_rows.append({'type': 'same', 'a': ing, 'b': b})
+        else:
+            ing_rows.append({'type': 'del', 'a': ing, 'b': None})
+            counts['del'] += 1
+    for ing in ings_b_list:
+        k = (ing.get('name') or '').lower()
+        if k not in seen:
+            ing_rows.append({'type': 'add', 'a': None, 'b': ing})
+            counts['add'] += 1
+
+    steps_a = _parse_steps((ver_a or {}).get('instructions') if ver_a else '')
+    steps_b = _parse_steps((ver_b or {}).get('instructions') if ver_b else '')
+    step_rows = _lcs_diff(steps_a, steps_b)
+    for r in step_rows:
+        if r['type'] == 'add':
+            counts['add'] += 1
+        elif r['type'] == 'del':
+            counts['del'] += 1
+
+    return render_template(
+        '_fragments/diff.html',
+        recipe=recipe, versions=versions, v_from=v_from, v_to=v_to,
+        ver_a=ver_a, ver_b=ver_b,
+        ing_rows=ing_rows, step_rows=step_rows, counts=counts,
+    )
+
+
+def _lcs_diff(a, b):
+    n, m = len(a), len(b)
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n - 1, -1, -1):
+        for j in range(m - 1, -1, -1):
+            if a[i] == b[j]:
+                dp[i][j] = dp[i + 1][j + 1] + 1
+            else:
+                dp[i][j] = max(dp[i + 1][j], dp[i][j + 1])
+    out = []
+    i = j = 0
+    while i < n and j < m:
+        if a[i] == b[j]:
+            out.append({'type': 'same', 'a': a[i], 'b': b[j]}); i += 1; j += 1
+        elif dp[i + 1][j] >= dp[i][j + 1]:
+            out.append({'type': 'del', 'a': a[i], 'b': None}); i += 1
+        else:
+            out.append({'type': 'add', 'a': None, 'b': b[j]}); j += 1
+    while i < n:
+        out.append({'type': 'del', 'a': a[i], 'b': None}); i += 1
+    while j < m:
+        out.append({'type': 'add', 'a': None, 'b': b[j]}); j += 1
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Annotation + planning APIs (client-side persistence).
+# ---------------------------------------------------------------------------
+
+@app.route('/api/annotation', methods=['POST'])
+def api_annotation_upsert():
+    payload = request.get_json(silent=True) or {}
+    try:
+        recipe_id = int(payload.get('recipe_id'))
+        target_type = payload.get('target_type')
+        target_key = payload.get('target_key')
+        text_val = (payload.get('text') or '').strip()
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid payload'}), 400
+    if target_type not in ('ingredient', 'step') or not target_key:
+        return jsonify({'error': 'Invalid target'}), 400
+    version = payload.get('version')
+    version = int(version) if version is not None else 0
+    now = datetime.now(timezone.utc).isoformat()
+    with engine.begin() as conn:
+        if not text_val:
+            conn.execute(text('''
+                DELETE FROM recipe_annotation
+                WHERE recipe_id=:rid AND version_number=:v
+                  AND target_type=:tt AND target_key=:tk
+            '''), {'rid': recipe_id, 'v': version, 'tt': target_type, 'tk': target_key})
+            return jsonify({'ok': True, 'deleted': True})
+        # upsert
+        existing = conn.execute(text('''
+            SELECT id FROM recipe_annotation
+            WHERE recipe_id=:rid AND version_number=:v
+              AND target_type=:tt AND target_key=:tk
+        '''), {'rid': recipe_id, 'v': version, 'tt': target_type, 'tk': target_key}).scalar()
+        if existing:
+            conn.execute(text(
+                'UPDATE recipe_annotation SET text=:t, updated_at=:u WHERE id=:id'
+            ), {'t': text_val, 'u': now, 'id': existing})
+        else:
+            conn.execute(text('''
+                INSERT INTO recipe_annotation
+                  (recipe_id, version_number, target_type, target_key, text, created_at, updated_at)
+                VALUES (:rid, :v, :tt, :tk, :t, :c, :u)
+            '''), {'rid': recipe_id, 'v': version, 'tt': target_type,
+                   'tk': target_key, 't': text_val, 'c': now, 'u': now})
+    return jsonify({'ok': True})
+
+
+@app.route('/api/plan/aggregate', methods=['GET'])
+def api_plan_aggregate():
+    ids = request.args.getlist('ids', type=int)
+    if not ids:
+        return jsonify({'groups': []})
+    with engine.connect() as conn:
+        placeholders = ','.join(f':id{i}' for i in range(len(ids)))
+        params = {f'id{i}': v for i, v in enumerate(ids)}
+        rows = conn.execute(text(f'''
+            SELECT i.name, i.grocery_category, i.kitchen_staple,
+                   ri.amount, ri.unit
+            FROM recipe_ingredient ri
+            JOIN ingredient i ON ri.ingredient_id = i.id
+            WHERE ri.recipe_id IN ({placeholders})
+        '''), params).mappings().all()
+
+    by_cat = {}
+    for r in rows:
+        cat = r['grocery_category'] or 'Övrigt'
+        key = (r['name'] or '').lower() + '|' + (r['unit'] or '').lower()
+        entry = by_cat.setdefault(cat, {}).setdefault(key, {
+            'key': key, 'name': r['name'], 'unit': r['unit'] or '',
+            'pantry': bool(r['kitchen_staple']), 'amounts': [],
+        })
+        entry['amounts'].append(r['amount'])
+
+    groups = []
+    for cat in sorted(by_cat.keys(), key=lambda s: s.lower()):
+        items = []
+        for it in by_cat[cat].values():
+            nums = []
+            non_numeric = []
+            for a in it['amounts']:
+                try:
+                    nums.append(float(str(a).replace(',', '.')))
+                except (TypeError, ValueError):
+                    if a:
+                        non_numeric.append(str(a))
+            if not non_numeric and nums:
+                total = sum(nums)
+                qty_display = str(int(total)) if abs(total - int(total)) < 1e-9 else f'{total:g}'
+            elif non_numeric and not nums:
+                qty_display = ' + '.join(non_numeric)
+            else:
+                qty_display = ' + '.join([f'{sum(nums):g}'] + non_numeric) if nums else ' + '.join(non_numeric)
+            items.append({
+                'key': it['key'], 'name': it['name'], 'unit': it['unit'],
+                'qty_display': qty_display, 'pantry': it['pantry'],
+            })
+        items.sort(key=lambda x: x['name'].lower())
+        groups.append({'cat': cat, 'items': items})
+    return jsonify({'groups': groups})
 
 def _category_options(conn):
     """Distinct existing values for the categorical fields shown in the edit
@@ -582,142 +920,13 @@ def delete_recipe(recipe_id):
     with engine.begin() as conn:
         conn.execute(text('DELETE FROM recipe_ingredient WHERE recipe_id=:id'), {'id': recipe_id})
         conn.execute(text('DELETE FROM recipe WHERE id=:id'), {'id': recipe_id})
-    return redirect(url_for('index'))
-
-@app.route('/ingredient_library', methods=['GET', 'POST'])
-def ingredient_library():
-
-    with engine.begin() as conn:
-        if request.method == 'POST':
-            ingredient_ids = [
-                row['id'] for row in conn.execute(text(
-                    'SELECT id FROM ingredient'
-                )).mappings().all()
-            ]
-            for ing_id in ingredient_ids:
-                grocery_category = request.form.get(f'grocery_category_{ing_id}', '').strip()
-                default_unit = request.form.get(f'default_unit_{ing_id}', '').strip()
-                aliases_raw = request.form.get(f'aliases_{ing_id}', '').strip()
-                kitchen_staple = 1 if request.form.get(f'kitchen_staple_{ing_id}') == 'on' else 0
-                if grocery_category not in ALLOWED_GROCERY_CATEGORIES:
-                    continue  # CHECK constraint skulle ändå reject:a
-                if not default_unit:
-                    continue
-                aliases_list = [a.strip() for a in aliases_raw.split(',') if a.strip()]
-                conn.execute(
-                    text('UPDATE ingredient SET grocery_category=:gc, '
-                         'default_unit=:du, kitchen_staple=:ks, aliases=:al '
-                         'WHERE id=:id'),
-                    {'gc': grocery_category, 'du': default_unit,
-                     'ks': kitchen_staple,
-                     'al': json.dumps(aliases_list, ensure_ascii=False),
-                     'id': ing_id}
-                )
-
-        ingredients = conn.execute(text(
-            'SELECT * FROM ingredient ORDER BY name COLLATE NOCASE'
-        )).mappings().all()
-
-        ingredient_recipes = {}
-        ingredient_aliases = {}
-        for ing in ingredients:
-            recipe_ids = [
-                str(row['recipe_id']) for row in conn.execute(
-                    text('SELECT recipe_id FROM recipe_ingredient WHERE ingredient_id=:id'), {'id': ing['id']}
-                ).mappings().all()
-            ]
-            ingredient_recipes[ing['id']] = ', '.join(recipe_ids)
-            try:
-                aliases = json.loads(ing['aliases'] or '[]')
-            except (TypeError, ValueError):
-                aliases = []
-            ingredient_aliases[ing['id']] = ', '.join(aliases)
-
-    return render_template(
-        'ingredient_library.html',
-        ingredients=ingredients,
-        ingredient_recipes=ingredient_recipes,
-        ingredient_aliases=ingredient_aliases,
-        allowed_categories=sorted(ALLOWED_GROCERY_CATEGORIES),
-    )
-
-@app.route('/recipe/<int:recipe_id>/history')
-def recipe_history(recipe_id):
-    with engine.connect() as conn:
-        recipe = conn.execute(
-            text("SELECT id, title FROM recipe WHERE id=:id"), {'id': recipe_id}
-        ).mappings().first()
-        if not recipe:
-            return "Recipe not found", 404
-        versions = conn.execute(text('''
-            SELECT id, version_number, changed_at, changed_by, change_note, title
-            FROM recipe_version WHERE recipe_id=:id ORDER BY version_number DESC
-        '''), {'id': recipe_id}).mappings().all()
-    return render_template('recipe_history.html', recipe=recipe, versions=versions)
+    return redirect(url_for('ide_home'))
 
 
 @app.route('/recipe/<int:recipe_id>/diff')
 def recipe_diff(recipe_id):
-    v_from = request.args.get('from', type=int)
-    v_to = request.args.get('to', type=int)
-    with engine.connect() as conn:
-        recipe = conn.execute(
-            text("SELECT id, title FROM recipe WHERE id=:id"), {'id': recipe_id}
-        ).mappings().first()
-        if not recipe:
-            return "Recipe not found", 404
-
-        if v_from is None or v_to is None:
-            versions = conn.execute(text('''
-                SELECT version_number FROM recipe_version WHERE recipe_id=:id ORDER BY version_number
-            '''), {'id': recipe_id}).mappings().all()
-            nums = [v['version_number'] for v in versions]
-            if len(nums) < 2:
-                return render_template('recipe_diff.html', recipe=recipe,
-                                       error="Behöver minst 2 versioner för att visa diff.", diff=None)
-            v_from, v_to = nums[-2], nums[-1]
-
-        ver_a = conn.execute(text(
-            "SELECT * FROM recipe_version WHERE recipe_id=:rid AND version_number=:v"
-        ), {'rid': recipe_id, 'v': v_from}).mappings().first()
-        ver_b = conn.execute(text(
-            "SELECT * FROM recipe_version WHERE recipe_id=:rid AND version_number=:v"
-        ), {'rid': recipe_id, 'v': v_to}).mappings().first()
-
-        if not ver_a or not ver_b:
-            return "Version not found", 404
-
-    text_fields = ['title', 'description', 'instructions', 'notes', 'tags', 'type', 'kitchen']
-    field_diffs = {}
-    for f in text_fields:
-        a_val = ver_a[f] or ''
-        b_val = ver_b[f] or ''
-        if a_val != b_val:
-            a_lines = a_val.splitlines(keepends=True)
-            b_lines = b_val.splitlines(keepends=True)
-            diff_lines = list(difflib.ndiff(a_lines, b_lines))
-            field_diffs[f] = diff_lines
-
-    ings_a = {i['name']: i for i in json.loads(ver_a['ingredients_json'] or '[]')}
-    ings_b = {i['name']: i for i in json.loads(ver_b['ingredients_json'] or '[]')}
-    all_names = sorted(set(ings_a) | set(ings_b))
-    ing_diff = []
-    for name in all_names:
-        if name in ings_a and name in ings_b:
-            a, b = ings_a[name], ings_b[name]
-            if a.get('amount') != b.get('amount') or a.get('unit') != b.get('unit') or a.get('note') != b.get('note'):
-                ing_diff.append(('changed', name, ings_a[name], ings_b[name]))
-            else:
-                ing_diff.append(('same', name, ings_a[name], ings_b[name]))
-        elif name in ings_a:
-            ing_diff.append(('removed', name, ings_a[name], None))
-        else:
-            ing_diff.append(('added', name, None, ings_b[name]))
-
-    return render_template('recipe_diff.html', recipe=recipe,
-                           ver_a=ver_a, ver_b=ver_b,
-                           field_diffs=field_diffs, ing_diff=ing_diff,
-                           v_from=v_from, v_to=v_to)
+    # Diff visas numera som flik i IDE:n.
+    return redirect(url_for('ide_home') + f'?open={recipe_id}&diff=1')
 
 
 # ---------------------------------------------------------------------------
@@ -866,84 +1075,6 @@ def api_recipe_commit_edit(recipe_id):
         'changed_at': result['changed_at'],
         'change_note': change_note,
     })
-
-
-@app.route('/shopping-list', methods=['GET', 'POST'])
-def shopping_list():
-    with engine.connect() as conn:
-        recipes = conn.execute(text(
-            "SELECT id, title FROM recipe ORDER BY title"
-        )).mappings().all()
-
-    if request.method == 'GET':
-        return render_template('shopping_list.html', recipes=recipes,
-                               result=None, selected_ids=[])
-
-    selected_ids = [int(x) for x in request.form.getlist('recipe_ids') if x.isdigit()]
-    hide_staples = request.form.get('hide_staples') == '1'
-
-    if not selected_ids:
-        return render_template('shopping_list.html', recipes=recipes,
-                               result=None, selected_ids=[], hide_staples=hide_staples,
-                               error="Välj minst ett recept.")
-
-    with engine.connect() as conn:
-        placeholders = ','.join([':id' + str(i) for i in range(len(selected_ids))])
-        params = {f'id{i}': v for i, v in enumerate(selected_ids)}
-        rows = conn.execute(text(f'''
-            SELECT i.name, i.grocery_category, i.kitchen_staple,
-                   ri.amount, ri.unit
-            FROM recipe_ingredient ri
-            JOIN ingredient i ON ri.ingredient_id = i.id
-            WHERE ri.recipe_id IN ({placeholders})
-        '''), params).mappings().all()
-
-        selected_recipes = conn.execute(text(f'''
-            SELECT id, title FROM recipe WHERE id IN ({placeholders})
-        '''), params).mappings().all()
-
-    from collections import defaultdict
-    agg = defaultdict(lambda: {'amounts': [], 'grocery_category': '', 'kitchen_staple': 0})
-    for row in rows:
-        key = (row['name'].strip().lower(), (row['unit'] or '').strip().lower())
-        entry = agg[key]
-        entry['display_name'] = row['name']
-        entry['grocery_category'] = row['grocery_category'] or 'Övrigt'
-        entry['kitchen_staple'] = row['kitchen_staple'] or 0
-        entry['unit'] = row['unit'] or ''
-        try:
-            entry['amounts'].append(float(row['amount'] or 0))
-        except (ValueError, TypeError):
-            entry['amounts'].append(row['amount'] or '')
-
-    items = []
-    for (name_norm, unit_norm), entry in agg.items():
-        amounts = entry['amounts']
-        if all(isinstance(a, float) for a in amounts):
-            total = sum(amounts)
-            amount_str = str(int(total)) if total == int(total) else str(total)
-        else:
-            amount_str = ' + '.join(str(a) for a in amounts if a)
-
-        items.append({
-            'name': entry['display_name'],
-            'amount': amount_str,
-            'unit': entry['unit'],
-            'grocery_category': entry['grocery_category'],
-            'kitchen_staple': entry['kitchen_staple'],
-        })
-
-    items.sort(key=lambda x: (x['grocery_category'], x['name']))
-
-    from itertools import groupby
-    grouped = []
-    for cat, group in groupby(items, key=lambda x: x['grocery_category']):
-        grouped.append((cat, list(group)))
-
-    return render_template('shopping_list.html', recipes=recipes,
-                           result=grouped, selected_ids=selected_ids,
-                           selected_recipes=selected_recipes,
-                           hide_staples=hide_staples)
 
 
 if __name__ == '__main__':
