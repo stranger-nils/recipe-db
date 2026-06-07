@@ -69,6 +69,13 @@
   explorerToggle && ideEl && explorerToggle.addEventListener("click", () => {
     ideEl.classList.toggle("show-explorer");
   });
+  // Stäng explorern automatiskt när användaren väljer något i panelen på mobil
+  // (annars täcker den den nyöppnade fliken/innehållet).
+  function closeExplorerOnMobile() {
+    if (window.matchMedia("(max-width:720px)").matches) {
+      ideEl && ideEl.classList.remove("show-explorer");
+    }
+  }
 
   /* ---------- kommandopalett ---------- */
   const cmdOverlay = $("#cmd-overlay");
@@ -135,7 +142,10 @@
   let openRecipe = (id) => { window.location.href = "/?open=" + id; };
 
   if (MODE === "recept") {
-    openRecipe = (id) => activateTab("r:" + id, () => createRecipeTab(id));
+    openRecipe = (id) => {
+      closeExplorerOnMobile();
+      activateTab("r:" + id, () => createRecipeTab(id));
+    };
 
     /* tabs-state måste finnas innan renderTree() kör (den anropar
        highlightActiveTreeRow → currentActiveTab → TABS). */
