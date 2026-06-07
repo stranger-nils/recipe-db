@@ -16,8 +16,8 @@
   --ink3:  oklch(0.620 0.014 252);
   --line:  oklch(0.906 0.004 248);
   --line2: oklch(0.822 0.006 248);
-  /* aptitlig blågrön petrol — kontrast ≥4.5:1 på off-white */
-  --accent: #0f6f86;
+  /* cyan-teal accent enligt design handoff */
+  --accent: #1f9ab4;
   --add-bg: oklch(0.957 0.024 158);
   --add-fg: oklch(0.46 0.075 158);
   --del-bg: oklch(0.957 0.024 26);
