@@ -43,13 +43,16 @@ a{ color:inherit; text-decoration:none; }
 .dens-luftig{  --fs:19px; --u:11px; --lh:1.78; --tab-h:42px; --uifs:13px; }
 
 .ide{ display:grid; grid-template-columns:56px clamp(220px,22vw,300px) 1fr;
-  height:100vh; overflow:hidden;
+  height:100dvh; min-height:100vh; overflow:hidden;
   --rail: color-mix(in oklab, var(--accent) 52%, oklch(0.205 0.03 216));
   --rail-fg: color-mix(in oklab, var(--accent) 36%, oklch(0.86 0.02 210)); }
 
 /* ---- aktivitetsrad ---- */
 .rail{ background:var(--rail); color:var(--rail-fg); display:flex; flex-direction:column;
-  align-items:center; padding:10px 0; gap:14px; }
+  align-items:center; padding:10px 0; gap:14px;
+  padding-top:max(10px, env(safe-area-inset-top));
+  padding-bottom:max(10px, env(safe-area-inset-bottom));
+  padding-left:env(safe-area-inset-left); }
 .rail-items{ display:flex; flex-direction:column; gap:6px; margin-top:6px; width:100%; align-items:center; }
 .rail-btn{ width:42px; height:42px; display:grid; place-items:center;
   color:var(--rail-fg); position:relative; opacity:.72; transition:.15s; }
@@ -134,7 +137,9 @@ a{ color:inherit; text-decoration:none; }
 .tab-pane{ display:none; }
 .tab-pane.active{ display:block; }
 
-.statusbar{ flex:none; height:26px; display:flex; align-items:center; gap:16px; padding:0 14px;
+.statusbar{ flex:none; min-height:26px; display:flex; align-items:center; gap:16px; padding:0 14px;
+  padding-bottom:env(safe-area-inset-bottom);
+  padding-right:max(14px, env(safe-area-inset-right));
   background:var(--rail); color:var(--rail-fg); font-family:var(--mono); font-size:11px; }
 .sb-mode{ color:var(--paper); text-transform:uppercase; letter-spacing:.04em; font-weight:500; }
 .sb-item{ display:inline-flex; align-items:center; gap:5px; opacity:.85; }
@@ -389,6 +394,108 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 .exp-scroll::-webkit-scrollbar-thumb, .editor-body::-webkit-scrollbar-thumb, .cmd-res::-webkit-scrollbar-thumb{
   background:var(--line2); border:3px solid var(--panel); }
 .editor-body::-webkit-scrollbar-thumb{ border-color:var(--paper); }
+
+/* ===========================================================
+   Responsiv pivot — touch, iPad, telefon.
+   Lägg till längst ner så att tidigare regler står oförändrade
+   ovanför och kan överrideras kontrollerat här.
+   =========================================================== */
+
+/* Touch-enheter: neutralisera "fastnande" hover-bakgrunder. */
+@media (hover:none){
+  .rail-btn:hover, .tab:hover, .tree-group-h:hover, .tree-row:hover,
+  .cat-row:hover, .pick-row:hover, .cmd-row:hover, .recipe-link:hover,
+  .lib-table tr:hover td, .plan-chip:hover, .btn-ghost:hover, .anno-add:hover,
+  .exp-mini button:hover, .exp-mini a:hover, .exp-mini-btn:hover{
+    background:inherit;
+  }
+  .rail-btn:hover{ opacity:.72; }
+  .tab:hover{ color:var(--ink2); }
+}
+
+/* Förhindra iOS auto-zoom på fokus: alla textinputs ≥16px. */
+@media (max-width:1024px){
+  .exp-search input, .cmd-input input,
+  .anno-edit input, .lib-table input, .lib-table select,
+  input[type="text"], input[type="search"], input[type="number"],
+  input[type="email"], textarea{
+    font-size:16px;
+  }
+}
+
+/* Stapla diff-vyn under 900px — sida-vid-sida blir oläsbart. */
+@media (max-width:900px){
+  .diff-cols-h{ grid-template-columns:1fr; }
+  .diff-col-hr{ border-left:none; border-top:1px solid var(--line); }
+  .df-pair{ grid-template-columns:1fr; }
+  .df-pair > .df-line:first-child{
+    border-right:none;
+    border-bottom:1px dashed color-mix(in oklab, var(--line) 60%, transparent);
+  }
+  .df-note-cell:first-child{ border-right:none; border-bottom:1px solid var(--line); }
+  .df-empty{ display:none; }
+}
+
+/* iPad-portrait / mellanbredd: smalna explorer, släpp doc max-width. */
+@media (min-width:721px) and (max-width:1024px){
+  .ide{ grid-template-columns:56px 200px 1fr; }
+  .doc{ max-width:none; padding:calc(var(--u)*4) calc(var(--u)*4) calc(var(--u)*8); }
+  .lib{ padding:calc(var(--u)*3) calc(var(--u)*3) calc(var(--u)*6); }
+}
+
+/* Telefon: större träffytor på tree-rader och tabs. */
+@media (max-width:720px){
+  .tree-row{ padding:10px 12px 10px 26px; font-size:13px; min-height:40px; }
+  .cat-row, .pick-row{ padding:10px 12px; font-size:13.5px; min-height:40px; }
+  .tree-group-h{ padding:10px 8px 6px; }
+  .tab{ padding:0 14px; min-height:38px; }
+  .tab-close{ width:24px; height:24px; }
+  .doc{ padding:calc(var(--u)*3) calc(var(--u)*2.5) calc(var(--u)*6); }
+  .doc-head h1{ font-size:calc(var(--fs)*1.4); }
+  .welcome-mark{ font-size:48px; letter-spacing:-1px; }
+  .lib{ padding:calc(var(--u)*2) calc(var(--u)*1.5) calc(var(--u)*6); }
+  /* ing-row: kompaktare kolumner, annotation drar in helt vänster. */
+  .ing-row{ grid-template-columns:auto auto 1fr auto; gap:6px; }
+  .ing-q{ padding-right:6px; }
+  .ing-anno, .ing-item > .anno-edit{ margin-left:0; }
+}
+
+/* ===== Riktig telefonlayout: göm rail, bottom-tab-bar ===== */
+@media (max-width:480px){
+  .ide{ grid-template-columns:0 0 1fr; padding-bottom:56px; }
+  .rail{ display:none; }
+  .explorer{ position:fixed; top:0; left:0; bottom:56px; width:min(86vw,320px); z-index:50;
+    transform:translateX(-110%); transition:transform .2s;
+    box-shadow:0 0 0 1px var(--line2); padding-top:env(safe-area-inset-top); }
+  .ide.show-explorer .explorer{ transform:none; }
+  .explorer-toggle{ display:grid; top:10px; left:10px; width:40px; height:40px;
+    top:calc(10px + env(safe-area-inset-top)); }
+
+  /* statusbar göms till förmån för bottom-tab-bar */
+  .statusbar{ display:none; }
+
+  /* bottom-tab-bar — renderas alltid (CSS::before-knep funkar inte med navigation;
+     vi förlitar oss på .mobile-tabbar i HTML — se nedan) */
+  .mobile-tabbar{ position:fixed; left:0; right:0; bottom:0; height:56px;
+    padding-bottom:env(safe-area-inset-bottom);
+    background:var(--rail); color:var(--rail-fg); display:flex; z-index:60;
+    box-shadow:0 -1px 0 color-mix(in oklab, var(--ink) 20%, transparent); }
+  .mobile-tabbar a{ flex:1; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:2px; padding:6px 0; color:var(--rail-fg);
+    font-family:var(--mono); font-size:10px; letter-spacing:.04em; text-transform:uppercase;
+    opacity:.72; }
+  .mobile-tabbar a.active{ opacity:1; color:var(--paper);
+    background:color-mix(in oklab, var(--paper) 8%, transparent); }
+  .mobile-tabbar a svg{ width:22px; height:22px; }
+
+  /* doc/lib får full bredd */
+  .doc{ max-width:none; }
+  .lib-table-wrap{ overflow-x:auto; }
+  .lib-table{ min-width:560px; }
+}
+/* Bottom-tab-bar visas bara på telefon. */
+.mobile-tabbar{ display:none; }
+@media (max-width:480px){ .mobile-tabbar{ display:flex; } }
 
 /* print: bara inköpslistan */
 @media print{
