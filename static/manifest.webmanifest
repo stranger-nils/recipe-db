@@ -1,0 +1,13 @@
+{
+  "name": "mise — recept",
+  "short_name": "mise",
+  "description": "Personlig receptsamling.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f3f4",
+  "theme_color": "#0f6f86",
+  "lang": "sv",
+  "icons": []
+}
