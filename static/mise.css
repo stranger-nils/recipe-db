@@ -462,7 +462,9 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 
 /* ===== Riktig telefonlayout: göm rail, bottom-tab-bar ===== */
 @media (max-width:480px){
-  .ide{ grid-template-columns:0 0 1fr; padding-bottom:56px; }
+  /* En enda kolumn — rail är display:none och explorer är position:fixed,
+     så editorn är ensam kvar i normalflödet och ska få full bredd. */
+  .ide{ grid-template-columns:1fr; padding-bottom:56px; }
   .rail{ display:none; }
   .explorer{ position:fixed; top:0; left:0; bottom:56px; width:min(86vw,320px); z-index:50;
     transform:translateX(-110%); transition:transform .2s;

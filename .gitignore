@@ -23,3 +23,7 @@ data/uploads/
 
 # Skill staging from Cowork sessions (apply via skill_changes/install.sh, then delete)
 skill_changes/
+
+# Lokal Docker-override för utveckling (bind-mount, LAN-bind, gunicorn --reload).
+# Får inte deployas till VPS:en.
+docker-compose.override.yml
