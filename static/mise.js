@@ -65,8 +65,9 @@
 
   /* ---------- mobil: toggla explorern ---------- */
   const explorerToggle = $("#explorer-toggle");
-  explorerToggle && explorerToggle.addEventListener("click", () => {
-    document.body.classList.toggle("explorer-open");
+  const ideEl = document.querySelector(".ide");
+  explorerToggle && ideEl && explorerToggle.addEventListener("click", () => {
+    ideEl.classList.toggle("show-explorer");
   });
 
   /* ---------- kommandopalett ---------- */
