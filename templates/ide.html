@@ -6,12 +6,12 @@
 <meta name="theme-color" content="#1f9ab4" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="mise" />
-<title>mise — recept-IDE</title>
+<meta name="apple-mobile-web-app-title" content="Recept" />
+<title>Recept</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="{{ url_for('static', filename='mise.css') }}" />
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
 <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}" />
 </head>
 <body class="dens-kompakt">
@@ -63,7 +63,6 @@
       {% if mode == 'recept' %}
         <div class="tab-pane active" data-pane="welcome">
           <div class="welcome">
-            <div class="welcome-mark">mise</div>
             <p>Öppna ett recept i panelen till vänster, eller tryck <kbd>⌘K</kbd>.</p>
             <p><a class="btn-ghost" href="/recipe/new/edit">+ nytt recept</a></p>
           </div>
@@ -116,7 +115,7 @@
   </div>
 </div>
 
-<script id="mise-data" type="application/json">{{ data_json|safe }}</script>
-<script src="{{ url_for('static', filename='mise.js') }}"></script>
+<script id="recipe-data" type="application/json">{{ data_json|safe }}</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

@@ -1,11 +1,9 @@
-# mise — a recipe IDE
+# recipe-db
 
 > A personal recipe book that behaves like a code editor.
 > Recipes open as tabs, ingredients live in a catalog, and every edit is a new version you can diff against the last one.
 
 This is my own cookbook, on my own terms. It started as a CRUD app for storing favorite dishes and slowly turned into something more interesting: a writing environment for recipes — quiet, monospaced, version-tracked, and built to grow with how I actually cook.
-
-The name comes from *mise en place*. The aesthetic comes from a JetBrains window at 1 AM.
 
 ---
 
@@ -71,31 +69,13 @@ To deploy a copy on your own VPS, see `docker-compose.yml` and `.github/workflow
 ```
 app.py                      # the whole backend, ~1000 lines
 templates/                  # Jinja templates (ide.html is the main view)
-static/                     # mise.css, mise.js, uploads/
+static/                     # app.css, app.js, uploads/
 scripts/                    # one-off importers and maintenance
 docs/                       # design notes and the workflow plan
 .claude/skills/             # recipe, edit-recipe, shopping-list — custom Claude skills
 ```
 
 The HTTP API lives in `app.py` under `/api/recipe/*` and is documented in [`CLAUDE.md`](CLAUDE.md), along with the working-modes split (Cowork for authoring, Claude Code for VPS shell work).
-
----
-
-## Roadmap
-
-Things I want to build, roughly in order of how much I miss them:
-
-- [ ] Annotations on individual ingredients and steps (notes that travel with the recipe across versions).
-- [ ] Richer diffs — a clearer "what changed in the method" view, not just textual.
-- [ ] In-app shopping list builder with ingredient consolidation across recipes.
-- [ ] Photo gallery view, with the photos I actually took.
-- [ ] Public read-only mode for sharing a single recipe by link.
-
-Things I deliberately don't want:
-
-- A chatbot bolted into the UI.
-- User accounts.
-- A general-purpose recipe database (this is *my* cookbook).
 
 ---
 

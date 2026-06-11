@@ -1,6 +1,6 @@
 {
-  "name": "mise — recept",
-  "short_name": "mise",
+  "name": "Recept",
+  "short_name": "Recept",
   "description": "Personlig receptsamling.",
   "start_url": "/",
   "scope": "/",

@@ -283,7 +283,7 @@ GROUP_BY_OPTIONS = {'none', 'kitchen', 'type'}
 
 
 # ---------------------------------------------------------------------------
-# Mise IDE — shell + view selectors.
+# Recept-IDE — shell + view selectors.
 # ---------------------------------------------------------------------------
 
 def _parse_steps(instructions):

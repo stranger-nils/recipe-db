@@ -1,7 +1,6 @@
-/* mise — Recept-IDE.
-   Designtokens + layout efter pivot till "tunn utilitär mono" (IBM Plex Mono,
-   linjer istället för boxar, petrol-accent som härleder rail/statusrad).
-   Källa: design_handoff_recept_ide 2/Recept-IDE.html. */
+/* Recept-IDE — designtokens + layout.
+   Tunn utilitär mono (IBM Plex Mono), linjer istället för boxar,
+   petrol-accent som härleder rail/statusrad. */
 
 :root{
   /* sval-neutral, en aning värme i mitttonerna — inte iskallt */

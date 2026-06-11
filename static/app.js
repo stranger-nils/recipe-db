@@ -1,8 +1,8 @@
-/* mise — klientlogik för Recept-IDE. Server-rendered fragment + vanilla JS. */
+/* Klientlogik för Recept-IDE. Server-rendered fragment + vanilla JS. */
 (function () {
   "use strict";
 
-  const DATA = JSON.parse(document.getElementById("mise-data").textContent);
+  const DATA = JSON.parse(document.getElementById("recipe-data").textContent);
   const MODE = DATA.mode;                       // 'recept' | 'ingredienser' | 'planering'
   const RECIPES = DATA.recipes || [];           // [{id,title,kitchen,type,version_count}]
   const CATALOG = DATA.catalog || [];           // [{name,grocery_category}]
