@@ -508,3 +508,53 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
   .plan-list{ column-width:320px; }
   body,html{ background:#fff; }
 }
+
+/* ---- tillagningsstatus (cook_log) ---- */
+:root{
+  --cook-cooked-fg: oklch(0.46 0.075 158);
+  --cook-cooked-bg: oklch(0.957 0.024 158);
+}
+/* filterpiller i utforskaren */
+.exp-filter{ display:flex; flex-wrap:wrap; gap:4px; margin:0 12px 10px; }
+.filter-pill{ font-family:var(--serif); font-size:11px; color:var(--ink3);
+  border:1px solid var(--line2); padding:2px 7px; letter-spacing:.01em; transition:.12s; }
+.filter-pill:hover{ color:var(--ink); border-color:var(--ink3); }
+.filter-pill.active{ color:var(--accent); border-color:var(--accent);
+  background:color-mix(in oklab, var(--accent) 8%, transparent); }
+/* cook-bar i receptvyn */
+.cookbar{ display:flex; align-items:center; justify-content:space-between; gap:12px;
+  flex-wrap:wrap; padding:calc(var(--u)*1.1) calc(var(--u)*1.6);
+  margin:calc(var(--u)*1.5) 0; border:1px solid var(--line);
+  background:var(--panel); }
+.cookbar.cook-cooked{ border-left:2px solid var(--cook-cooked-fg); }
+.cookbar.cook-none{ border-left:2px solid var(--line2); }
+.cookbar-state{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.cook-badge{ font-family:var(--mono); font-size:11px; letter-spacing:.02em; font-weight:500; }
+.cook-badge.cook-cooked{ color:var(--cook-cooked-fg); }
+.cook-badge.cook-none{ color:var(--ink3); }
+.cook-rating{ color:var(--cook-cooked-fg); font-size:13px; letter-spacing:1px; }
+.cook-date{ font-family:var(--mono); font-size:10.5px; color:var(--ink3); }
+.cookbar-actions{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.cook-clear{ color:var(--ink3); }
+/* utvärderingsnotis */
+.cook-notes{ font-family:var(--serif); font-size:calc(var(--fs)*0.94); color:var(--ink2);
+  background:var(--cook-cooked-bg); border-left:2px solid var(--cook-cooked-fg);
+  padding:calc(var(--u)*1.2) calc(var(--u)*1.8); margin:0 0 calc(var(--u)*2);
+  white-space:pre-wrap; }
+.cook-notes-tag{ font-family:var(--mono); font-size:10.5px; color:var(--paper);
+  background:var(--cook-cooked-fg); padding:1px 5px; margin-right:9px; font-weight:500; }
+/* inline-formulär för "markera lagad" */
+.cook-form{ border:1px solid var(--line); border-left:2px solid var(--cook-cooked-fg);
+  background:var(--panel); padding:calc(var(--u)*1.6); margin:0 0 calc(var(--u)*2);
+  display:flex; flex-direction:column; gap:calc(var(--u)*1.2); }
+.cook-form-row{ display:flex; align-items:center; gap:12px; }
+.cook-form-label{ font-family:var(--mono); font-size:11px; color:var(--ink3);
+  text-transform:uppercase; letter-spacing:.04em; }
+.cook-star{ color:var(--line2); font-size:19px; line-height:1; padding:0 1px; transition:.1s; }
+.cook-star:hover, .cook-star.on{ color:var(--cook-cooked-fg); }
+.cook-form-notes{ width:100%; box-sizing:border-box; min-height:64px; resize:vertical;
+  font-family:var(--serif); font-size:calc(var(--fs)*0.94); color:var(--ink);
+  background:var(--paper); border:1px solid var(--line2); padding:calc(var(--u)*1.1);
+  outline:none; }
+.cook-form-notes:focus{ border-color:var(--accent); }
+.cook-form-actions{ display:flex; gap:14px; }

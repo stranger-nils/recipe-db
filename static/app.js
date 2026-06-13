@@ -163,11 +163,16 @@
     const recCount = $("#rec-count");
     let grouping = localStorage.getItem("mise.recGrouping") || "kok";
     if (recGrouping) recGrouping.value = grouping;
+    let statusFilter = "";  // "" | "cooked" | "none"
 
     function renderTree() {
       const q = (recSearch.value || "").toLowerCase().trim();
-      const filtered = RECIPES.filter((r) =>
-        !q || r.title.toLowerCase().includes(q) || (r.kitchen || "").toLowerCase().includes(q));
+      const filtered = RECIPES.filter((r) => {
+        if (q && !(r.title.toLowerCase().includes(q) || (r.kitchen || "").toLowerCase().includes(q))) return false;
+        if (statusFilter === "none") return !r.cook_status;
+        if (statusFilter) return r.cook_status === statusFilter;
+        return true;
+      });
       const groups = groupRecipes(filtered, grouping);
       recCount.textContent = filtered.length + " recept";
       if (!filtered.length) { recTree.innerHTML = '<div class="empty sm">Inga träffar.</div>'; return; }
@@ -198,9 +203,26 @@
       renderTree();
     });
     recSearch && recSearch.addEventListener("input", renderTree);
+
+    const statusFilterEl = $("#rec-status-filter");
+    statusFilterEl && $$("[data-status-filter]", statusFilterEl).forEach((btn) => {
+      btn.addEventListener("click", () => {
+        statusFilter = btn.dataset.statusFilter;
+        $$("[data-status-filter]", statusFilterEl).forEach((b) =>
+          b.classList.toggle("active", b === btn));
+        renderTree();
+      });
+    });
     renderTree();
 
     window._miseHighlightTree = highlightActiveTreeRow;
+    // Uppdatera galleriets cook-status in-place efter en ändring i en receptvy.
+    window._miseRefreshCookStatus = (recipeId, status) => {
+      const r = RECIPES.find((x) => x.id === recipeId);
+      if (!r) return;
+      r.cook_status = status || null;
+      renderTree();
+    };
 
     function persistTabs() {
       try { sessionStorage.setItem(TAB_STORAGE_KEY, JSON.stringify(TABS)); } catch (_) {}
@@ -412,6 +434,45 @@
       window._miseOpenDiff && window._miseOpenDiff(recipeId, v ? +v : null);
     });
 
+    // reload denna pane med nuvarande version (efter cook-status-ändring)
+    async function reloadPane() {
+      const v = doc.dataset.activeVersion || "";
+      const url = "/_frag/recipe/" + recipeId + (v ? "?v=" + v : "");
+      const html = await fetch(url).then((r) => r.text());
+      pane.innerHTML = html;
+      wireRecipePane(pane, recipeId);
+    }
+
+    // cook-bar (tillagningsstatus)
+    const cookbar = $("[data-cookbar]", doc);
+    if (cookbar) {
+      const cookVersion = +cookbar.dataset.cookVersion || 0;
+      const postCook = (body) =>
+        fetch("/api/cook-log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.assign({ recipe_id: recipeId, version: cookVersion }, body)),
+        });
+      // Galleriet speglar live-versionen (0); uppdatera bara då.
+      const refresh = (status) => {
+        if (cookVersion === 0 && window._miseRefreshCookStatus) {
+          window._miseRefreshCookStatus(recipeId, status);
+        }
+      };
+      $$("[data-cook-action]", cookbar).forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const action = btn.dataset.cookAction;
+          if (action === "clear") {
+            await postCook({ status: null });
+            refresh(null);
+            await reloadPane();
+          } else if (action === "cooked") {
+            openCookForm(cookbar, cookVersion, postCook, reloadPane, () => refresh("cooked"));
+          }
+        });
+      });
+    }
+
     // annotations
     const activeVersion = doc.dataset.activeVersion || ""; // empty = live
     $$('.ing-item, .step-item', doc).forEach((item) => {
@@ -484,6 +545,40 @@
         }),
       });
     } catch (e) { /* swallow */ }
+  }
+
+  // Inline-formulär för "Markera lagad": betyg (1–5) + utvärderingsnotis.
+  function openCookForm(cookbar, version, postCook, reloadPane, onSaved) {
+    if ($(".cook-form", cookbar.parentNode)) return;
+    let rating = +cookbar.dataset.cookRating || 0;
+    const notesVal = cookbar.dataset.cookNotes || "";
+    const form = document.createElement("div");
+    form.className = "cook-form";
+    form.innerHTML = `
+      <div class="cook-form-row">
+        <span class="cook-form-label">Betyg</span>
+        <span class="cook-stars" data-stars>${[1, 2, 3, 4, 5]
+          .map((n) => `<button type="button" class="cook-star${n <= rating ? " on" : ""}" data-star="${n}">★</button>`)
+          .join("")}</span>
+      </div>
+      <textarea class="cook-form-notes" placeholder="Hur blev det? Vad ska ändras till nästa gång?">${escapeHtml(notesVal)}</textarea>
+      <div class="cook-form-actions">
+        <button type="button" class="btn-ghost" data-cook-save>Spara utvärdering</button>
+        <button type="button" class="btn-ghost" data-cook-cancel>Avbryt</button>
+      </div>`;
+    cookbar.insertAdjacentElement("afterend", form);
+    const stars = $$("[data-star]", form);
+    stars.forEach((s) => s.addEventListener("click", () => {
+      rating = +s.dataset.star;
+      stars.forEach((x) => x.classList.toggle("on", +x.dataset.star <= rating));
+    }));
+    $("[data-cook-cancel]", form).addEventListener("click", () => form.remove());
+    $("[data-cook-save]", form).addEventListener("click", async () => {
+      const notes = $(".cook-form-notes", form).value.trim();
+      await postCook({ status: "cooked", rating: rating || null, notes });
+      onSaved && onSaved();
+      await reloadPane();
+    });
   }
 
   /* ---------- Diff-pane ---------- */

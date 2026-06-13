@@ -199,6 +199,19 @@ def apply_recipe_edit(conn, recipe_id, new_state, change_note=None,
         'changed_at': now, 'changed_by': changed_by, 'change_note': change_note,
     })
 
+    # 1b. Re-anchor any cook-log entry on the live state (version 0) to the
+    #     snapshot we just froze. The content the user cooked/evaluated now lives
+    #     at recipe_version.next_ver, so its tillagningsstatus must follow it.
+    #     The new live state (version 0) is thereby left unproven again.
+    try:
+        conn.execute(text('''
+            UPDATE cook_log SET version_number=:next_ver, updated_at=:now
+            WHERE recipe_id=:rid AND version_number=0
+        '''), {'next_ver': next_ver, 'now': now, 'rid': recipe_id})
+    except Exception:
+        # cook_log saknas (migration 008 ej körd) — edit ska inte blockeras.
+        pass
+
     # 2. UPDATE the recipe row (preserve current value for fields not in new_state).
     conn.execute(text('''
         UPDATE recipe SET
@@ -309,7 +322,8 @@ def _ide_data(mode):
     with engine.connect() as conn:
         recipe_rows = conn.execute(text('''
             SELECT r.id, r.title, r.kitchen, r.type,
-                   COALESCE((SELECT MAX(version_number) FROM recipe_version v WHERE v.recipe_id=r.id), 0) AS version_count
+                   COALESCE((SELECT MAX(version_number) FROM recipe_version v WHERE v.recipe_id=r.id), 0) AS version_count,
+                   (SELECT cl.status FROM cook_log cl WHERE cl.recipe_id=r.id AND cl.version_number=0) AS cook_status
             FROM recipe r ORDER BY r.title
         ''')).mappings().all()
         catalog = conn.execute(text(
@@ -423,12 +437,21 @@ def _load_recipe_for_view(conn, recipe_id, version_number=None):
         WHERE recipe_id=:id ORDER BY version_number
     '''), {'id': recipe_id}).mappings().all()
     current_version_number = versions_rows[-1]['version_number'] if versions_rows else 0
+
+    # Tillagningsstatus per version (0 = live). map: {version_number: {...}}.
+    cook_rows = conn.execute(text('''
+        SELECT version_number, status, cooked_at, rating, notes
+        FROM cook_log WHERE recipe_id=:id
+    '''), {'id': recipe_id}).mappings().all()
+    cook_map = {c['version_number']: dict(c) for c in cook_rows}
+
     versions = [
         {
             'version_number': v['version_number'],
             'changed_at': v['changed_at'] or '',
             'change_note': v['change_note'] or '',
             'is_current': v['version_number'] == current_version_number,
+            'cook': cook_map.get(v['version_number']),
         }
         for v in versions_rows
     ]
@@ -495,6 +518,9 @@ def _load_recipe_for_view(conn, recipe_id, version_number=None):
     '''), {'id': recipe_id, 'v': version_number or 0}).mappings().all()
     annotations = {f"{a['target_type']}:{a['target_key']}": a['text'] for a in ann_rows}
 
+    # Cook-bar gäller den version som visas just nu (0 = live).
+    cook_version = version_number or 0
+
     return {
         'recipe': recipe,
         'ingredients': ingredients,
@@ -504,6 +530,8 @@ def _load_recipe_for_view(conn, recipe_id, version_number=None):
         'version_note': version_note,
         'annotations': annotations,
         'base_servings': 4,
+        'cook_version': cook_version,
+        'cook': cook_map.get(cook_version),
     }
 
 
@@ -663,6 +691,66 @@ def api_annotation_upsert():
             '''), {'rid': recipe_id, 'v': version, 'tt': target_type,
                    'tk': target_key, 't': text_val, 'c': now, 'u': now})
     return jsonify({'ok': True})
+
+
+@app.route('/api/cook-log', methods=['POST'])
+def api_cook_log_upsert():
+    """Sätt tillagningsstatus för en receptversion (0 = live/aktuell).
+
+    Binärt: en rad i cook_log betyder "lagad & utvärderad", annars oprövad.
+    Body: {recipe_id, version, status, rating?, notes?, cooked_at?}.
+    status='cooked' → lagad (sätter cooked_at till idag om inget anges);
+    status saknas/null/'' → ta bort markeringen. En rad per (recipe_id, version)."""
+    payload = request.get_json(silent=True) or {}
+    try:
+        recipe_id = int(payload.get('recipe_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid recipe_id'}), 400
+    version = payload.get('version')
+    version = int(version) if version not in (None, '') else 0
+    status = (payload.get('status') or '').strip() or None
+    if status not in (None, 'cooked'):
+        return jsonify({'error': 'Invalid status'}), 400
+
+    rating = payload.get('rating')
+    try:
+        rating = int(rating) if rating not in (None, '') else None
+    except (TypeError, ValueError):
+        rating = None
+    if rating is not None and not (1 <= rating <= 5):
+        return jsonify({'error': 'rating must be 1–5'}), 400
+    notes = (payload.get('notes') or '').strip() or None
+    now = datetime.now(timezone.utc).isoformat()
+
+    with engine.begin() as conn:
+        if status is None:
+            conn.execute(text(
+                'DELETE FROM cook_log WHERE recipe_id=:rid AND version_number=:v'
+            ), {'rid': recipe_id, 'v': version})
+            return jsonify({'ok': True, 'deleted': True})
+
+        cooked_at = None
+        if status == 'cooked':
+            cooked_at = (payload.get('cooked_at') or '').strip() or now[:10]
+
+        existing = conn.execute(text(
+            'SELECT id FROM cook_log WHERE recipe_id=:rid AND version_number=:v'
+        ), {'rid': recipe_id, 'v': version}).scalar()
+        if existing:
+            conn.execute(text('''
+                UPDATE cook_log SET status=:s, cooked_at=:ca, rating=:r,
+                       notes=:n, updated_at=:u WHERE id=:id
+            '''), {'s': status, 'ca': cooked_at, 'r': rating, 'n': notes,
+                   'u': now, 'id': existing})
+        else:
+            conn.execute(text('''
+                INSERT INTO cook_log
+                  (recipe_id, version_number, status, cooked_at, rating, notes,
+                   created_at, updated_at)
+                VALUES (:rid, :v, :s, :ca, :r, :n, :c, :u)
+            '''), {'rid': recipe_id, 'v': version, 's': status, 'ca': cooked_at,
+                   'r': rating, 'n': notes, 'c': now, 'u': now})
+    return jsonify({'ok': True, 'status': status})
 
 
 @app.route('/api/plan/aggregate', methods=['GET'])

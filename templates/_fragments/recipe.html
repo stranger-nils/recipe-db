@@ -35,7 +35,7 @@
           <option value="">live (aktuell)</option>
           {% for v in versions %}
             <option value="{{ v.version_number }}" {% if active_version == v.version_number %}selected{% endif %}>
-              v{{ v.version_number }}{% if v.is_current %} · aktuell{% endif %} — {{ v.changed_at[:10] }}
+              v{{ v.version_number }}{% if v.is_current %} · aktuell{% endif %} — {{ v.changed_at[:10] }}{% if v.cook %} · ✓ lagad{% if v.cook.rating %} {{ v.cook.rating }}/5{% endif %}{% endif %}
             </option>
           {% endfor %}
         </select>
@@ -51,6 +51,31 @@
       <button data-stepper="+">+</button>
     </div>
   </div>
+
+  {# Tillagningsstatus för den version som visas (cook_version: 0 = live). #}
+  <div class="cookbar cook-{{ 'cooked' if cook else 'none' }}" data-cookbar
+       data-cook-version="{{ cook_version }}"
+       data-cook-rating="{{ cook.rating if cook and cook.rating else '' }}"
+       data-cook-notes="{{ cook.notes if cook and cook.notes else '' }}">
+    <div class="cookbar-state">
+      {% if cook %}
+        <span class="cook-badge cook-cooked">✓ Lagad</span>
+        {% if cook.rating %}<span class="cook-rating" title="Betyg">{% for n in range(5) %}{{ '★' if n < cook.rating else '☆' }}{% endfor %}</span>{% endif %}
+        {% if cook.cooked_at %}<span class="cook-date">{{ cook.cooked_at[:10] }}</span>{% endif %}
+      {% else %}
+        <span class="cook-badge cook-none">Oprövad version</span>
+      {% endif %}
+    </div>
+    <div class="cookbar-actions">
+      <button class="btn-ghost" data-cook-action="cooked">{% if cook %}Redigera utvärdering{% else %}✓ Markera lagad…{% endif %}</button>
+      {% if cook %}<button class="btn-ghost cook-clear" data-cook-action="clear" title="Ta bort markering">Rensa</button>{% endif %}
+    </div>
+  </div>
+  {% if cook and cook.status == 'cooked' and cook.notes %}
+    <div class="cook-notes" data-cook-notes>
+      <span class="cook-notes-tag">utvärdering</span>{{ cook.notes }}
+    </div>
+  {% endif %}
 
   {% if version_note %}
     <div class="ver-note">
