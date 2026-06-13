@@ -261,6 +261,86 @@ def apply_recipe_edit(conn, recipe_id, new_state, change_note=None,
     }
 
 
+def create_recipe(conn, new_state, changed_by='chat'):
+    """Create a brand-new recipe together with its initial version (version 1).
+
+    new_state keys:
+        title (required), description, instructions, notes, tags, type, kitchen
+        ingredients: list of dicts {name, amount, unit, note,
+                                    grocery_category, default_unit, kitchen_staple}.
+                     New ingredients are created only when grocery_category +
+                     default_unit are supplied; otherwise IngredientNotInCatalog
+                     is raised — same contract as apply_recipe_edit, so the caller
+                     can surface a helpful error instead of fabricating NULL rows.
+    Returns {recipe_id, new_version_number, changed_at}.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+
+    fields = {
+        'title': (new_state.get('title') or '').strip(),
+        'description': new_state.get('description') or '',
+        'instructions': new_state.get('instructions') or '',
+        'notes': new_state.get('notes') or '',
+        'kitchen': new_state.get('kitchen') or '',
+        'type': new_state.get('type') or '',
+        'tags': new_state.get('tags') or '',
+    }
+
+    res = conn.execute(text('''
+        INSERT INTO recipe (title, description, instructions, notes, kitchen, type, tags)
+        VALUES (:title, :description, :instructions, :notes, :kitchen, :type, :tags)
+    '''), fields)
+    recipe_id = res.lastrowid
+
+    for ing in (new_state.get('ingredients') or []):
+        ing_id = _resolve_or_create_ingredient(
+            conn,
+            name=ing.get('name', ''),
+            grocery_category=ing.get('grocery_category'),
+            default_unit=ing.get('default_unit'),
+            kitchen_staple=ing.get('kitchen_staple', 0),
+        )
+        if not ing_id:
+            continue
+        conn.execute(text('''
+            INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, unit, note)
+            VALUES (:recipe_id, :ingredient_id, :amount, :unit, :note)
+        '''), {
+            'recipe_id': recipe_id,
+            'ingredient_id': ing_id,
+            'amount': str(ing.get('amount', '') or ''),
+            'unit': ing.get('unit', '') or '',
+            'note': ing.get('note', '') or '',
+        })
+
+    new_ings = conn.execute(text('''
+        SELECT i.id AS ingredient_id, i.name, ri.amount, ri.unit, ri.note
+        FROM recipe_ingredient ri
+        JOIN ingredient i ON ri.ingredient_id = i.id
+        WHERE ri.recipe_id = :id
+    '''), {'id': recipe_id}).mappings().all()
+
+    conn.execute(text('''
+        INSERT INTO recipe_version
+            (recipe_id, version_number, title, description, instructions, notes,
+             tags, type, kitchen, ingredients_json, changed_at, changed_by, change_note)
+        VALUES (:recipe_id, 1, :title, :description, :instructions, :notes,
+                :tags, :type, :kitchen, :ings_json, :changed_at, :changed_by, 'Initial version')
+    '''), {
+        'recipe_id': recipe_id,
+        **fields,
+        'ings_json': json.dumps([dict(r) for r in new_ings], ensure_ascii=False),
+        'changed_at': now,
+        'changed_by': changed_by,
+    })
+
+    return {
+        'recipe_id': recipe_id,
+        'new_version_number': 1,
+        'changed_at': now,
+    }
+
+
 # ---------------------------------------------------------------------------
 # JSON API auth — bearer token via the RECIPE_API_TOKEN env var.
 # ---------------------------------------------------------------------------
@@ -1163,6 +1243,56 @@ def api_recipe_commit_edit(recipe_id):
         'changed_at': result['changed_at'],
         'change_note': change_note,
     })
+
+
+@app.route('/api/recipe', methods=['POST'])
+def api_recipe_create():
+    auth_err = _check_api_token()
+    if auth_err is not None:
+        return auth_err
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Body must be a JSON object'}), 400
+
+    title = payload.get('title')
+    if not isinstance(title, str) or not title.strip():
+        return jsonify({'error': 'title (non-empty string) is required'}), 400
+
+    allowed = {'title', 'description', 'instructions', 'notes',
+               'tags', 'type', 'kitchen', 'ingredients'}
+    new_state = {k: v for k, v in payload.items() if k in allowed}
+
+    if 'ingredients' in new_state and new_state['ingredients'] is not None:
+        if not isinstance(new_state['ingredients'], list):
+            return jsonify({'error': 'ingredients must be a list'}), 400
+        for i, ing in enumerate(new_state['ingredients']):
+            if not isinstance(ing, dict) or not (ing.get('name') or '').strip():
+                return jsonify({'error': f'ingredients[{i}] must have a non-empty name'}), 400
+
+    _backup_before_edit(note="api-create")
+    try:
+        with engine.begin() as conn:
+            result = create_recipe(
+                conn, new_state,
+                changed_by=payload.get('changed_by', 'chat'),
+            )
+    except IngredientNotInCatalog as e:
+        return jsonify({
+            'error': 'Ingredient not in catalog',
+            'ingredient_name': e.name,
+            'missing_fields': e.missing,
+            'hint': str(e),
+        }), 400
+    except SQLAlchemyError as e:
+        return jsonify({'error': f'Database error: {e}'}), 500
+
+    return jsonify({
+        'ok': True,
+        'recipe_id': result['recipe_id'],
+        'version_number': result['new_version_number'],
+        'changed_at': result['changed_at'],
+    }), 201
 
 
 if __name__ == '__main__':

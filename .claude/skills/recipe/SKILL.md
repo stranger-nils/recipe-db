@@ -16,32 +16,57 @@ Hjälp användaren brainstorma receptidéer och spara nya recept i databasen. Vi
 ## Språk
 Alla recept, ingredienser och instruktioner ska vara på **svenska**.
 
-## Miljö-detektion — Två lägen
+## Spara-vägar — HTTP-API först
 
-Skillen körs i två miljöer med olika capabilities:
+Nya recept sparas via **HTTP-API:t** (`POST /api/recipe`) — samma mellanlager som `edit-recipe` använder. Det fungerar **i båda miljöerna** (Cowork och Claude Code), kräver ingen SSH, och är **förstahandsvalet**. API:t skapar receptet, kopplar ingredienser och loggar `recipe_version` v1 i en transaktion — och returnerar ett tydligt fel om en ny ingrediens saknar `grocery_category`/`default_unit`, så du kan rätta direkt utan manuell granskning.
 
-- **Claude Code-läge** (terminal på Macbook): Har direkt SSH-access till VPS:en (`ssh minvps`). Skriver direkt till auktoritativ databas på VPS.
-- **Cowork-läge** (desktop-app, sandboxed): Har ingen nätverksaccess till VPS. Skriver "pending commits" till fil — Claude Code applicerar dem senare.
+Två reservvägar finns kvar för när API:t inte är konfigurerat/nåbart:
+- **Pending-commit** (Cowork utan API): skriv commit till fil, Claude Code applicerar senare.
+- **Direkt SSH** (Claude Code): kör transaktion mot VPS-DB:n.
 
-**Detektera vid sessionsstart:**
+**Välj väg vid push:**
 
-```bash
-ssh -o ConnectTimeout=5 -o BatchMode=yes minvps 'echo ok' 2>/dev/null
+1. Sourca `.claude/.env` och kontrollera `RECIPE_API_URL` + `RECIPE_API_TOKEN` (se Konfiguration nedan).
+2. Är båda satta → **använd HTTP-API:t** (Steg 3a). Detta är normalfallet, oavsett miljö.
+3. Saknas konfig → fall tillbaka: pending-commit i Cowork (Steg 3b), eller direkt SSH om `ssh minvps` svarar (Steg 3c, Claude Code).
+
+Kommunicera tydligt vid push vilken väg som användes ("sparad direkt till VPS via API" vs "sparad som pending commit — växla till Claude Code för att applicera").
+
+## Konfiguration — `.claude/.env`
+
+HTTP-API:t kräver två env-variabler från `.claude/.env` (gitignored, samma fil som `edit-recipe` använder):
+
+```
+RECIPE_API_URL=https://din-domän.example
+RECIPE_API_TOKEN=<lång slumpsträng, samma som på VPS>
 ```
 
-- Exit 0 → **Claude Code-läge**.
-- Annat → **Cowork-läge**.
+Saknas filen/variablerna: använd en reservväg (pending-commit eller SSH). Det finns en `.claude/.env.example` att kopiera.
 
-Kommunicera tydligt med användaren i början av en arbetsflödes-sekvens vilket läge som är aktivt, särskilt vid push ("sparad direkt till VPS" vs "sparad som pending commit — växla till Claude Code för att applicera").
+**Sourca .env i bash så här:**
 
-## ⚠️ Vanliga fallgropar — läs INNAN du skriver pending-commit
+```bash
+set -a
+# Cowork-sandbox-path:
+[ -f /sessions/*/mnt/recipe-db/.claude/.env ] && \
+  source /sessions/*/mnt/recipe-db/.claude/.env 2>/dev/null
+# Claude Code (Mac):
+ENV_FILE="$(ls -d "$HOME"/recipe-db/.claude/.env 2>/dev/null | head -1)"
+[ -n "$ENV_FILE" ] && source "$ENV_FILE" 2>/dev/null
+set +a
+[ -n "$RECIPE_API_URL" ] && [ -n "$RECIPE_API_TOKEN" ] || echo "NO_API_CONFIG"
+```
 
-1. **Fältnamn i pending-commit JSON är `type` och `kitchen`** — INTE `section`/`menu`. Det gamla schemat döptes om i migration 005. Använder du `section`/`menu` kommer recepten sparas med NULL i kategorisering.
-2. **Varje ingrediens MÅSTE ha `default_unit`** i JSON (inte bara `unit`). `ingredient.default_unit` är NOT NULL i DB:n — saknas det rejectas inserten för alla *nya* ingredienser.
+## ⚠️ Vanliga fallgropar — läs INNAN du sparar
+
+Gäller **både** API-body (`POST /api/recipe`) och pending-commit JSON:
+
+1. **Fältnamnen är `type` och `kitchen`** — INTE `section`/`menu`. Det gamla schemat döptes om i migration 005. Använder du `section`/`menu` kommer recepten sparas med NULL i kategorisering.
+2. **Varje *ny* ingrediens MÅSTE ha `default_unit`** (inte bara `unit`) **och** `grocery_category`. Båda är NOT NULL/CHECK i DB:n — saknas något rejectas en ny ingrediens (API svarar 400 med `missing_fields`).
 3. **`kitchen` är ren text utan emoji.** Skriv `"Mexikanskt"`, inte `"🌮 Mexikanskt"`.
 4. **`type` är ett av**: `förrätt`, `huvudrätt`, `sidorätt`, `komponent`, `efterrätt`. Inte fritext som `"Tacos"` eller `"Salsa"` (det hör hemma i `tags`).
 
-Se det fullständiga JSON-schemat längre ner — kopiera från det, inte från minnet.
+Se de fullständiga schemana längre ner — kopiera från dem, inte från minnet.
 
 ## Databas
 
@@ -184,26 +209,50 @@ Säg "push" för att spara,
 eller ge feedback för att justera.
 ```
 
-I Cowork-läge: visa **inte** numeriska ID:n (de tilldelas vid push mot VPS). I Claude Code-läge: visa preliminärt ID (MAX(id)+1 från VPS).
+Visa **inte** numeriska recept-ID:n i previewen — de tilldelas först vid spar (API:t/VPS returnerar ID). Undantag: 3c (direkt SSH) där du kan visa preliminärt ID (MAX(id)+1 från VPS).
 
 ### Steg 3 — Push
 
-**Claude Code-läge:** Direkt mot VPS.
+Sourca `.claude/.env` och välj väg enligt "Spara-vägar" ovan: **3a om API är konfigurerat** (normalfallet), annars reservväg 3b/3c.
 
-1. Via SSH, kör en transaktion mot `/opt/recipe-db/data/recipe.db`:
-   - MAX(id) + 1 för nytt recept.
-   - För varje ingrediens: `LOWER(name)`-matcha → återanvänd ID eller skapa ny.
-   - INSERT i `recipe`.
-   - INSERT i `recipe_ingredient`.
-   - INSERT i `recipe_version` med `version_number = 1`, `changed_by = 'chat'`, `changed_at = <ISO-timestamp>`, `ingredients_json = <serialiserad lista>`.
-2. Bekräfta:
+#### 3a — HTTP-API (förstahandsval, båda miljöerna)
+
+`POST $RECIPE_API_URL/api/recipe` med `Authorization: Bearer $RECIPE_API_TOKEN`. Body = receptet (samma fält som schemat nedan, utan `operation`/`schema_version`). Befintliga ingredienser behöver bara `name` (kanoniskt namn eller alias); nya kräver `grocery_category` + `default_unit`.
+
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer $RECIPE_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @- "$RECIPE_API_URL/api/recipe" <<'JSON'
+{
+  "title": "Snabbtacos med halloumi",
+  "description": "...",
+  "instructions": "1. ...\n2. ...",
+  "notes": null,
+  "tags": "vegetariskt,tacos",
+  "type": "huvudrätt",
+  "kitchen": "Mexikanskt",
+  "ingredients": [
+    {"name": "halloumi", "amount": "250", "unit": "g", "note": "",
+     "grocery_category": "Mejeri", "default_unit": "g", "kitchen_staple": 0}
+  ]
+}
+JSON
+```
+
+Svar `201` → `{"ok": true, "recipe_id": N, "version_number": 1, "changed_at": "..."}`. Bekräfta:
 
 ```
-✅ Sparat på VPS! [titel] (id: [id], version: 1)
+✅ Sparat via API! [titel] (id: [recipe_id], version: 1)
    - [X] ingredienser kopplade ([Y] nya skapade)
 ```
 
-**Cowork-läge:** Skriv pending-commit.
+Felhantering:
+- `400` `"error": "Ingredient not in catalog"` → en ny ingrediens saknar `grocery_category`/`default_unit` (se `missing_fields` + `ingredient_name`). Fyll i och posta om. Hela inserten rullas tillbaka — inget halvsparat recept blir kvar.
+- `400` `title ... is required` → titel saknas/tom.
+- `401` / `503` → token/konfig-problem (kolla `.claude/.env` och `RECIPE_API_TOKEN` på VPS). **Logga aldrig token.**
+
+#### 3b — Pending-commit (reserv: Cowork utan API-konfig)
 
 1. Bygg commit-objekt (schema nedan), skriv till `.claude/pending-commits/<ISO-timestamp>_<slug>.json`.
 2. Bekräfta:
@@ -212,6 +261,18 @@ I Cowork-läge: visa **inte** numeriska ID:n (de tilldelas vid push mot VPS). I 
 📦 Pending commit skapad: [filnamn]
    Öppna Claude Code i projektmappen och säg "apply pending"
    för att skriva till VPS-databasen.
+```
+
+#### 3c — Direkt SSH (reserv: Claude Code utan API-konfig)
+
+Via SSH, kör en transaktion mot `/opt/recipe-db/data/recipe.db`:
+- MAX(id) + 1 för nytt recept.
+- För varje ingrediens: `LOWER(name)`-matcha → återanvänd ID eller skapa ny.
+- INSERT i `recipe`, `recipe_ingredient`, samt `recipe_version` (`version_number = 1`, `changed_by = 'chat'`, `changed_at = <ISO-timestamp>`, `ingredients_json = <serialiserad lista>`).
+
+```
+✅ Sparat på VPS! [titel] (id: [id], version: 1)
+   - [X] ingredienser kopplade ([Y] nya skapade)
 ```
 
 ## "apply pending" (endast Claude Code-läge)
@@ -267,14 +328,14 @@ Filnamn: `.claude/pending-commits/<YYYY-MM-DDTHH-MM-SSZ>_<slug>.json`. `slug` = 
 
 ## Viktiga regler
 
-- **ID-hantering**: Läs alltid MAX(id) från auktoritativ DB (VPS i Claude Code-läge) innan insert. Aldrig hårdkodade ID:n.
+- **ID-hantering**: Via API:t (3a) tilldelas och returneras ID:t av servern — hitta aldrig på det. Bara i SSH-vägen (3c) läser du MAX(id) själv. Aldrig hårdkodade ID:n.
 - **Ingrediensmatchning**: NOCASE + alias-lookup. Använd alltid kanoniskt namn från DB:n, aldrig din egen stavning om det finns en träff.
 - **Nya ingredienser**: kräver `grocery_category` (från listan) + `default_unit` + `kitchen_staple` (1 för skafferisaker som salt/peppar/olja, annars 0). Saknas något → DB:n rejectar med CHECK/NOT NULL.
 - **Granularitet**: bara det som inhandlas separat. `äggula` ≠ ny rad. `gullök` vs `silverlök` = separata rader.
 - **Instruktioner**: Numrerade steg, separerade med newlines.
 - **notes**: NULL om inget speciellt.
-- **Transaktioner**: Alla skrivningar inom `BEGIN; ... COMMIT;` (ROLLBACK vid fel).
+- **Transaktioner**: API:t (3a) gör hela sparet atomiskt. I SSH-vägen (3c) kapsla in allt i `BEGIN; ... COMMIT;` (ROLLBACK vid fel).
 - **Visa alltid preview innan push** — aldrig direkt till DB utan bekräftelse.
 - **Versionshistorik**: Varje push (nytt eller edit) loggar en rad i `recipe_version`.
-- **Lokal snapshot skrivs aldrig**: I Cowork-läge är lokal `recipe.db` strikt read-only. All skrivning går till pending-commit-fil.
+- **Lokal snapshot skrivs aldrig**: lokal `recipe.db` är strikt read-only (ingrediens-matching/preview). Skrivning går via API (3a), pending-commit (3b) eller SSH mot VPS (3c) — aldrig mot snapshoten.
 - **Edits → annan skill**: Om användaren vill ändra ett befintligt recept, säg "Det här är `edit-recipe`-territorium — invokera den" istället för att gå vidare.

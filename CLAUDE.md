@@ -37,7 +37,7 @@ This project is worked on across two Claude environments with complementary role
 - Notion Kanban management for the recipe pipeline.
 - Shopping list generation (via the `shopping-list` skill) — saves to the Notion Inköpslistor database.
 - File/code edits that don't require VPS shell access (e.g., Flask feature work, template changes, docs).
-- For *new* recipes, the `recipe` skill still writes a pending-commit JSON file to `.claude/pending-commits/`, since new recipes are rarer and benefit from the manual review step in Claude Code (especially for new ingredients).
+- Creating *new* recipes (via the `recipe` skill) — writes directly to the VPS database over the HTTP API (`POST /api/recipe`), same as edits. No Claude Code roundtrip needed. The pending-commit path (writing a JSON file to `.claude/pending-commits/` for Claude Code to apply via SSH) remains as a fallback when the API isn't configured/reachable, or when a manual review step is wanted.
 
 **Claude Code (terminal on the user's Macbook)** handles:
 - Applying pending commits (new recipes) to the VPS database via SSH.
@@ -56,7 +56,7 @@ Custom skills for this project live in `.claude/skills/`. They are the source of
 
 | Skill | Purpose |
 |---|---|
-| `recipe` | Brainstorm and save *new* recipes. Cowork writes pending-commits; Claude Code applies them via SSH. Slash: `/recipe`. |
+| `recipe` | Brainstorm and save *new* recipes. Primary path is the HTTP API (`POST /api/recipe`), which works from both Cowork and Claude Code. Pending-commits (Cowork) and direct SSH (Claude Code) remain as fallbacks when the API isn't configured. Slash: `/recipe`. |
 | `edit-recipe` | Iterate on an *existing* recipe via post-cook reflection. Reads/writes via the HTTP API (`RECIPE_API_TOKEN`). Logs a new version with a `change_note`. Slash: `/edit-recipe`. |
 | `shopping-list` | Build a consolidated shopping list from recipes in the Notion Recept-pipeline; save as a categorized entry in the Notion Inköpslistor database. |
 
@@ -105,15 +105,16 @@ Single-file Flask app (`app.py`) with Jinja2 templates and SQLAlchemy for databa
 
 ## Recipe HTTP API
 
-The Flask app exposes a small JSON API used by the `edit-recipe` skill to read recipes and commit new versions without going through SSH. All endpoints require `Authorization: Bearer $RECIPE_API_TOKEN`.
+The Flask app exposes a small JSON API used by the `recipe` and `edit-recipe` skills to read recipes, create new ones, and commit new versions without going through SSH. All endpoints require `Authorization: Bearer $RECIPE_API_TOKEN`.
 
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/api/recipe/search?q=<text>` | GET | Title substring search; returns `{results: [{id, title, section, menu}]}`. |
 | `/api/recipe/<id>` | GET | Full recipe + ingredients + `current_version_number`. |
+| `/api/recipe` | POST | Create a new recipe. Body: `title` (required) + optional `description`, `instructions`, `notes`, `tags`, `type`, `kitchen`, `ingredients`. New ingredients need `grocery_category` + `default_unit` (else 400 with `missing_fields`). Creates the recipe, links ingredients, and writes `recipe_version` v1 atomically. Returns 201. |
 | `/api/recipe/<id>/commit-edit` | POST | Apply an edit. Body must include `change_note` and `expected_version_number`; remaining fields are partial — missing fields keep current values. Returns 409 on optimistic version conflict. |
 
-Server-side logic lives in `apply_recipe_edit()` in `app.py`, which is the same function the web edit form uses. New version rows are tagged `changed_by='chat'` (skill) or `'web'` (form).
+Server-side logic lives in `apply_recipe_edit()` (edits) and `create_recipe()` (new recipes) in `app.py`, the same functions the web edit/new forms build on. New version rows are tagged `changed_by='chat'` (skill) or `'web'` (form).
 
 ## Environment Variables
 
