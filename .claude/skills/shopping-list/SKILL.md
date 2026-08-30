@@ -3,6 +3,25 @@ name: shopping-list
 description: "Skapa en konsoliderad inköpslista från ett antal recept i Notion (Recept-pipeline) och spara den som en ny sida i Notion-databasen Inköpslistor — kategoriserad per butiksavdelning. Triggas när användaren säger 'inköpslista', 'shoppinglista', 'handla', 'helgens matlagning', 'skapa lista' eller liknande, OCH räknar upp recept som ska ingå. Nyckelord: inköpslista, handlingslista, handla, shopping, helgens recept, vad ska jag handla."
 ---
 
+<!-- SKILL_VERSION: 2026-08-21 -->
+
+## ⚠️ Versionskontroll — gör detta först
+
+Den här skillen finns i två kopior som uppdateras via **olika kanaler** och glider isär tyst:
+
+- **Repot**: `recipe-db/.claude/skills/shopping-list/SKILL.md` — source of truth, versionerad i git.
+- **Claude-kontot** (Customize → Skills) — det är den kopian Cowork laddar, och den uppdateras **bara** genom manuell uppladdning.
+
+Kontrollera därför alltid vid start, innan du gör något annat:
+
+1. Läs `SKILL_VERSION`-raden överst i den här filen — det är kopian du kör just nu.
+2. Är `recipe-db` åtkomlig (Cowork: ansluten mapp, Claude Code: repo-roten)? Läs `SKILL_VERSION` överst i `.claude/skills/shopping-list/SKILL.md`.
+3. **Är repot nyare** → följ repo-filen i den här sessionen, och säg det rakt ut till användaren:
+   > "Kontots skill-kopia är daterad `<kontots datum>`, repot har `<repots datum>`. Jag följer repo-versionen. Ladda upp den nya filen under Customize → Skills så försvinner glappet."
+4. Går repot inte att läsa → nämn i en mening att versionskontrollen inte kunde göras.
+
+Hoppa aldrig över steget. Det kostar två filläsningar och är enda skyddet mot att köra en månadsgammal instruktion utan att märka det.
+
 # Shopping-list Skill — Inköpslistor från recept
 
 ## Profil

@@ -27,3 +27,6 @@ skill_changes/
 # Lokal Docker-override för utveckling (bind-mount, LAN-bind, gunicorn --reload).
 # Får inte deployas till VPS:en.
 docker-compose.override.yml
+
+# Veckomeny-utkast (genereras; publiceras till Pi:n, inte till git)
+plans/

@@ -6,11 +6,13 @@ Den här filen orienterar en Claude Code-session som precis har öppnats i `reci
 
 Detta är Nils personliga receptdatabas. Du kör i `claude` (Claude Code) på hans Macbook. Du har direkt SSH-access till VPS:en via aliaset `ssh minvps` (som är `root@187.77.67.116`).
 
-Systerverktyget är **Cowork** (desktop-appen) som kör i en sandbox utan nätverksaccess till VPS:en. Cowork hanterar recept-brainstorming och Notion Kanban. Du hanterar allt som kräver att faktiskt skriva till databasen.
+Systerverktyget är **Cowork** (desktop-appen).
+
+> ⚠️ **Rättelse (2026-08-21).** Här stod att Cowork "kör i en sandbox utan nätverksaccess till VPS:en". Det stämmer inte längre. Cowork når VPS-API:t (`recipedb.cloud`) via desktop-bryggan och kan skriva recept direkt med `POST /api/recipe` — verifierat 2026-08-21 (recept id 41 skapades den vägen). Pending-commit-flödet är därmed en **reservväg**, inte huvudspåret, och `.claude/pending-commits/` bör normalt vara tom.
 
 ## Start-checklista
 
-1. **Synka skills till global mapp** så Cowork ser dem i nästa session: `bash scripts/sync-skills.sh`. Se "Skill-synkning" nedan.
+1. **Synka skills till global mapp** för Claude Code: `bash scripts/sync-skills.sh`. Detta uppdaterar INTE Cowork — se "Skill-synkning" nedan.
 2. Läs `CLAUDE.md` (rotmappen) — särskilt "Working modes"-sektionen.
 3. Läs `docs/WORKFLOW_OVERHAUL_PLAN.md` — full plan för vad som ska göras.
 4. Kolla efter pending commits: `ls -la .claude/pending-commits/`. Om det finns filer där behöver de applicera till VPS.
@@ -18,9 +20,20 @@ Systerverktyget är **Cowork** (desktop-appen) som kör i en sandbox utan nätve
 
 ## Skill-synkning
 
-Projektets skills bor i `.claude/skills/` (versioneras i git, source of truth). Cowork laddar dock bara skills från `~/.claude/skills/` (global mapp på Macen, ej versionerad).
+Projektets skills bor i `.claude/skills/` (versioneras i git, source of truth).
 
-Av den anledningen finns `scripts/sync-skills.sh` som speglar projekt-skills → global mapp. **Kör det vid varje session-start** (steg 1 ovan). Det är idempotent och rör inte skills i den globala mappen som tillhör andra projekt.
+> ⚠️ **Rättelse (2026-08-21).** Här stod tidigare att "Cowork laddar bara skills från `~/.claude/skills/`". Det är fel, och felet kostade två månaders tyst drift: Cowork-sessioner kör i Anthropics moln och kan inte se den här datorns hemkatalog alls. Cowork hämtar sin skill-lista från **Claude-kontot** vid sessionsstart.
+
+En skill-ändring måste därför spridas åt **två håll**:
+
+| Mål | Hur | Effekt |
+|---|---|---|
+| Claude Code | `bash scripts/sync-skills.sh` | direkt |
+| Cowork | manuell uppladdning under **Customize → Skills** i Claude-appen | nästa Cowork-session |
+
+`scripts/sync-skills.sh` sköter bara det första ledet. Det är idempotent och rör inte skills i den globala mappen som tillhör andra projekt.
+
+**Driftvakt:** varje `SKILL.md` inleds med en `SKILL_VERSION`-stämpel och en instruktion som säger åt sessionen att jämföra sin egen version mot repo-kopian och säga till vid glapp. Ta inte bort den — det är den som gör drift synlig. Höj datumet när du ändrar en skill.
 
 **Regel:** Redigera skills enbart under `.claude/skills/` (denna repo), aldrig direkt i `~/.claude/skills/`. Ändringar i den globala mappen försvinner nästa gång synken körs.
 

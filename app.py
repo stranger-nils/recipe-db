@@ -833,6 +833,35 @@ def api_cook_log_upsert():
     return jsonify({'ok': True, 'status': status})
 
 
+@app.route('/api/cook-log', methods=['GET'])
+def api_cook_log_list():
+    """Vad har lagats, och när. Används av veckomeny-skillen för att undvika
+    att föreslå samma rätter vecka efter vecka.
+
+    Query: ?since=YYYY-MM-DD (valfritt) filtrerar på cooked_at.
+    Svar: {results: [{recipe_id, title, version_number, cooked_at, rating}]}
+    sorterat senast lagat först. Rader utan cooked_at kommer sist."""
+    auth_err = _check_api_token()
+    if auth_err is not None:
+        return auth_err
+
+    since = (request.args.get('since') or '').strip()
+    sql = """
+        SELECT c.recipe_id, r.title, c.version_number, c.cooked_at, c.rating
+        FROM cook_log c JOIN recipe r ON r.id = c.recipe_id
+        WHERE c.status = 'cooked'
+    """
+    params = {}
+    if since:
+        sql += " AND c.cooked_at >= :since"
+        params['since'] = since
+    sql += " ORDER BY c.cooked_at IS NULL, c.cooked_at DESC, r.title"
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(sql), params).mappings().all()
+    return jsonify({'results': [dict(r) for r in rows]})
+
+
 @app.route('/api/plan/aggregate', methods=['GET'])
 def api_plan_aggregate():
     ids = request.args.getlist('ids', type=int)

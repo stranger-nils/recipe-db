@@ -3,6 +3,25 @@ name: edit-recipe
 description: "Reflektera över ett redan publicerat recept efter att du lagat det, diskutera justeringar, och skapa en ny version i databasen. Triggas av /edit-recipe, eller fraser som 'jag lagade X igår', 'efterkok', 'reflektion kring [recept]', 'ändra/uppdatera/justera [recept]'. Skriver direkt till VPS-databasen via HTTP-API — fungerar lika bra från Cowork som från Claude Code."
 ---
 
+<!-- SKILL_VERSION: 2026-08-21 -->
+
+## ⚠️ Versionskontroll — gör detta först
+
+Den här skillen finns i två kopior som uppdateras via **olika kanaler** och glider isär tyst:
+
+- **Repot**: `recipe-db/.claude/skills/edit-recipe/SKILL.md` — source of truth, versionerad i git.
+- **Claude-kontot** (Customize → Skills) — det är den kopian Cowork laddar, och den uppdateras **bara** genom manuell uppladdning.
+
+Kontrollera därför alltid vid start, innan du gör något annat:
+
+1. Läs `SKILL_VERSION`-raden överst i den här filen — det är kopian du kör just nu.
+2. Är `recipe-db` åtkomlig (Cowork: ansluten mapp, Claude Code: repo-roten)? Läs `SKILL_VERSION` överst i `.claude/skills/edit-recipe/SKILL.md`.
+3. **Är repot nyare** → följ repo-filen i den här sessionen, och säg det rakt ut till användaren:
+   > "Kontots skill-kopia är daterad `<kontots datum>`, repot har `<repots datum>`. Jag följer repo-versionen. Ladda upp den nya filen under Customize → Skills så försvinner glappet."
+4. Går repot inte att läsa → nämn i en mening att versionskontrollen inte kunde göras.
+
+Hoppa aldrig över steget. Det kostar två filläsningar och är enda skyddet mot att köra en månadsgammal instruktion utan att märka det.
+
 # Edit-recipe Skill — Post-cook reflektion → ny version
 
 ## Profil
@@ -253,6 +272,7 @@ Bekräftelse efter success:
 - **expected_version_number** ska alltid skickas — det är skyddsnätet mot konflikter.
 - **Skicka bara fält som faktiskt ändras** i payloaden (utöver `change_note` och `expected_version_number`). Det gör diffar i historiken renare.
 - **Kanoniska ingrediensnamn**: använd `name` exakt som det stod i GET-svaret. Kolla `aliases`-arrayen innan du föreslår en "ny" ingrediens — den kan redan finnas som alias. Tillåtna kategorier: `Frukt och grönt`, `Färska örter`, `Mejeri`, `Kött`, `Fågel`, `Fläsk`, `Fisk`, `Kolhydrater`, `Baljväxter`, `Konserver`, `Smaksättare`, `Färdiga tillbehör`, `Bageri`, `Frys`, `Alkohol`, `Övrigt`. Nya ingredienser kräver också `default_unit`.
+- **Kategorisering utgår från PROD-data, aldrig från exempel eller minne.** Rör du fälten `kitchen`/`type`/`tags`: hämta först befintliga värden live med `GET $RECIPE_API_URL/api/recipe/search?q=` (tomt `q` = alla recept; dedupa `kitchen`/`type` ur svaret) och kopiera värdet exakt därifrån. `kitchen` skrivs ALLTID som emoji + mellanslag + text (`🇮🇹 Italienskt`, `🍜 Asiatiskt`) — finns bara en legacy-variant utan emoji i prod, normalisera till emoji-varianten och säg det i previewen. `type` är en kort maträttstyp med inledande versal utan emoji (`Tacos`, `Wok`); `tags` är kommaseparerade gemener.
 - **Granularitet**: katalogen rymmer bara saker som inhandlas separat. Skriv `ägg` (inte `äggula`), `vitlök` (inte `vitlöksklyfta`). Nyans hör hemma i `recipe_ingredient.note` ("endast gula", "rivna").
 - **Image-fältet rörs inte** av det här flödet — bilduppladdning sker i webb-UI.
 - **Inga ID:n hårdkodas.** Slå alltid upp recept med `/api/recipe/search` först.

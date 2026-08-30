@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Mall. __REPO__ ersätts vid installation, se docs/autopublish.md. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.nils.veckomeny-autopublish</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>__REPO__/scripts/publish-plan.sh</string>
+  </array>
+  <key>WatchPaths</key>
+  <array>
+    <string>__REPO__/plans</string>
+  </array>
+  <key>ThrottleInterval</key>
+  <integer>15</integer>
+  <key>StandardOutPath</key>
+  <string>__REPO__/plans/.autopublish.log</string>
+  <key>StandardErrorPath</key>
+  <string>__REPO__/plans/.autopublish.log</string>
+</dict>
+</plist>
