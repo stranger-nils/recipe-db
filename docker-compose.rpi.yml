@@ -1,12 +1,29 @@
-# RPi-lokal override — används INTE på VPS:en (den kör docker compose utan -f).
-# Skillnad mot docker-compose.yml:
-#   - Binder mot 0.0.0.0:5001 istället för 127.0.0.1:5001, så appen nås från
-#     både LAN (http://192.168.0.106:5001) och OpenClaw-containern på Pi:n.
-#   - Sätter ett tydligt container-namn för enkel hantering.
-# Användning (från repot):
-#   docker compose -f docker-compose.yml -f docker-compose.rpi.yml up -d --build
+# RPi-lokal deployment av recipe-db — fristående compose (används INTE på VPS:en).
+#
+# Skillnader mot docker-compose.yml (VPS):
+#   - Binder mot 0.0.0.0:5001 istället för 127.0.0.1:5001 → nås från LAN
+#     (http://192.168.0.106:5001) och från OpenClaw-containern på Pi:n.
+#   - Bind-mounts med ABSOLUTA host-sökvägar (daemonen tolkar dem på RPi-värden,
+#     så filen fungerar även när den körs inifrån OpenClaw-containern).
+#   - container_name: recipe-db för enkel hantering.
+#
+# Användning:  docker compose -f docker-compose.rpi.yml up -d --build
+# Ångra:       docker compose -f docker-compose.rpi.yml down
 services:
   recipe-db:
+    build: .
+    image: recipe-db:local
     container_name: recipe-db
+    restart: unless-stopped
     ports:
       - "5001:5001"
+    volumes:
+      - /home/nilslunden/docker/openclaw/data/workspace/recipe-db/data/recipe.db:/app/recipe.db
+      - /home/nilslunden/docker/openclaw/data/workspace/recipe-db/data/uploads:/app/static/uploads
+      - /home/nilslunden/docker/openclaw/data/workspace/recipe-db/data/backups:/app/backups
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite:///recipe.db
+      - BACKUP_DIR=/app/backups
+      - RECIPE_DB_PATH=/app/recipe.db
