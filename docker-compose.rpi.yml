@@ -1,0 +1,12 @@
+# RPi-lokal override — används INTE på VPS:en (den kör docker compose utan -f).
+# Skillnad mot docker-compose.yml:
+#   - Binder mot 0.0.0.0:5001 istället för 127.0.0.1:5001, så appen nås från
+#     både LAN (http://192.168.0.106:5001) och OpenClaw-containern på Pi:n.
+#   - Sätter ett tydligt container-namn för enkel hantering.
+# Användning (från repot):
+#   docker compose -f docker-compose.yml -f docker-compose.rpi.yml up -d --build
+services:
+  recipe-db:
+    container_name: recipe-db
+    ports:
+      - "5001:5001"
