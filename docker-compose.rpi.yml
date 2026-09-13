@@ -21,6 +21,7 @@ services:
       - /home/nilslunden/docker/openclaw/data/workspace/recipe-db/data/recipe.db:/app/recipe.db
       - /home/nilslunden/docker/openclaw/data/workspace/recipe-db/data/uploads:/app/static/uploads
       - /home/nilslunden/docker/openclaw/data/workspace/recipe-db/data/backups:/app/backups
+      - /home/nilslunden/docker/openclaw/data/workspace/recipe-db/data/plans:/app/static/plans
     env_file:
       - .env
     environment:
