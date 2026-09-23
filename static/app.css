@@ -1,28 +1,30 @@
 /* Recept-IDE — designtokens + layout.
-   Tunn utilitär mono (IBM Plex Mono), linjer istället för boxar,
-   petrol-accent som härleder rail/statusrad. */
+   Rå industrialism: varm betong/plåster, grafitstål, säkerhetsorange
+   som målerimärkning. Mono rakt igenom, linjer istället för boxar,
+   synlig struktur (raster, numrering, tryckmärken). */
 
 :root{
-  /* sval-neutral, en aning värme i mitttonerna — inte iskallt */
-  --paper: oklch(0.994 0.002 250);
-  --bg:    oklch(0.966 0.0035 248);
-  --panel: oklch(0.978 0.003 248);
-  /* rail/statusrad härleds ur accenten på .ide (se nedan) */
-  --rail:  color-mix(in oklab, var(--accent) 52%, oklch(0.205 0.03 216));
-  --rail-fg: color-mix(in oklab, var(--accent) 36%, oklch(0.86 0.02 210));
-  --ink:   oklch(0.305 0.021 256);
-  --ink2:  oklch(0.462 0.018 254);
-  --ink3:  oklch(0.620 0.014 252);
-  --line:  oklch(0.906 0.004 248);
-  --line2: oklch(0.822 0.006 248);
-  /* cyan-teal accent enligt design handoff */
-  --accent: #1f9ab4;
-  --add-bg: oklch(0.957 0.024 158);
-  --add-fg: oklch(0.46 0.075 158);
-  --del-bg: oklch(0.957 0.024 26);
-  --del-fg: oklch(0.52 0.115 26);
-  --chg-bg: oklch(0.957 0.022 226);
-  --chg-fg: oklch(0.47 0.075 228);
+  /* varm betong/plåster — inte kallt SaaS-vitt */
+  --paper: oklch(0.945 0.007 72);
+  --bg:    oklch(0.915 0.011 66);
+  --panel: oklch(0.930 0.008 70);
+  /* grafitstål för rail/statusrad (sval kontrapunkt till det varma) */
+  --rail:  oklch(0.24 0.02 250);
+  --rail-fg: oklch(0.84 0.02 75);
+  --ink:   oklch(0.26 0.022 55);
+  --ink2:  oklch(0.435 0.02 55);
+  --ink3:  oklch(0.62 0.016 55);
+  --line:  oklch(0.84 0.013 62);
+  --line2: oklch(0.70 0.016 60);
+  /* säkerhetsorange — målerimärkning, inte "brand" */
+  --accent: oklch(0.58 0.175 45);
+  /* diff: pigment istället för pastell — khaki, tegel, ockra */
+  --add-bg: oklch(0.94 0.045 140);
+  --add-fg: oklch(0.50 0.09 140);
+  --del-bg: oklch(0.94 0.05 35);
+  --del-fg: oklch(0.52 0.10 35);
+  --chg-bg: oklch(0.94 0.045 80);
+  --chg-fg: oklch(0.50 0.085 80);
   /* en enda mono-familj för allt */
   --serif: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --mono:  'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -37,14 +39,14 @@ input,select,textarea{ font-family:inherit; color:inherit; }
 ::selection{ background: color-mix(in oklab, var(--accent) 28%, transparent); }
 a{ color:inherit; text-decoration:none; }
 
-.dens-kompakt{ --fs:15px; --u:6px; --lh:1.5; --tab-h:33px; --uifs:12px; }
-.dens-normal{  --fs:17px; --u:8px; --lh:1.62; --tab-h:38px; --uifs:12.5px; }
-.dens-luftig{  --fs:19px; --u:11px; --lh:1.78; --tab-h:42px; --uifs:13px; }
+.dens-kompakt{ --fs:15px; --u:7px; --lh:1.6; --tab-h:36px; --uifs:12px; }
+.dens-normal{  --fs:17px; --u:9px; --lh:1.7; --tab-h:42px; --uifs:12.5px; }
+.dens-luftig{  --fs:19px; --u:12px; --lh:1.85; --tab-h:46px; --uifs:13px; }
 
 .ide{ display:grid; grid-template-columns:56px clamp(220px,22vw,300px) 1fr;
   height:100dvh; min-height:100vh; overflow:hidden;
-  --rail: color-mix(in oklab, var(--accent) 52%, oklch(0.205 0.03 216));
-  --rail-fg: color-mix(in oklab, var(--accent) 36%, oklch(0.86 0.02 210)); }
+  --rail: oklch(0.24 0.02 250);
+  --rail-fg: oklch(0.84 0.02 75); }
 
 /* ---- aktivitetsrad ---- */
 .rail{ background:var(--rail); color:var(--rail-fg); display:flex; flex-direction:column;
@@ -61,7 +63,7 @@ a{ color:inherit; text-decoration:none; }
   background:var(--paper); }
 .rail-tip{ position:absolute; left:52px; white-space:nowrap; background:var(--ink); color:var(--paper);
   font-family:var(--mono); font-size:11px; padding:4px 8px; opacity:0; pointer-events:none;
-  transform:translateX(-4px); transition:.13s; z-index:30; }
+  transform:translateX(-4px); transition:.13s; z-index:30; border:1px solid var(--line2); }
 .rail-btn:hover .rail-tip{ opacity:1; transform:none; }
 
 /* ---- utforskare ---- */
@@ -142,6 +144,7 @@ a{ color:inherit; text-decoration:none; }
   padding-right:max(14px, env(safe-area-inset-right));
   background:var(--rail); color:var(--rail-fg); font-family:var(--mono); font-size:11px; }
 .sb-mode{ color:var(--paper); text-transform:uppercase; letter-spacing:.04em; font-weight:500; }
+.sb-mode::before{ content:"["; } .sb-mode::after{ content:"]"; color:var(--rail-fg); }
 .sb-item{ display:inline-flex; align-items:center; gap:5px; opacity:.85; }
 .sb-item.dim{ opacity:.55; }
 .sb-spacer{ flex:1; }
@@ -155,17 +158,29 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
   padding:1px 6px; }
 
 /* ---- receptdokument ---- */
-.doc{ max-width:760px; margin:0 auto; padding:calc(var(--u)*4.5) calc(var(--u)*5) calc(var(--u)*8); }
-.breadcrumb{ display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11.5px;
+.doc{ max-width:780px; margin:0 auto; position:relative;
+  padding:calc(var(--u)*5) calc(var(--u)*6) calc(var(--u)*10); }
+/* tryckmärken — registreringskryss i hörnen, som på ett ritningsblad */
+.doc::before, .doc::after{ content:""; position:absolute; width:15px; height:15px; pointer-events:none; }
+.doc::before{ top:0; left:0; border-top:2px solid var(--ink3); border-left:2px solid var(--ink3); }
+.doc::after{ bottom:0; right:0; border-bottom:2px solid var(--ink3); border-right:2px solid var(--ink3); }
+.breadcrumb{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-family:var(--mono); font-size:11.5px;
   color:var(--ink3); margin-bottom:calc(var(--u)*2.5); }
 .bc-ver{ margin-left:4px; color:var(--accent); font-weight:500; }
-.doc-head h1{ font-family:var(--serif); font-weight:500; font-size:calc(var(--fs)*1.55); line-height:1.18;
-  margin:0 0 calc(var(--u)*1.5); letter-spacing:-0.01em; text-transform:none; }
+.doc-head{ position:relative; padding-bottom:calc(var(--u)*2.5); border-bottom:2px solid var(--ink3);
+  margin-bottom:calc(var(--u)*2.2); }
+.doc-head::after{ content:""; position:absolute; left:0; right:0; bottom:-5px; height:1px; background:var(--line2); }
+.doc-head-line{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.rec-no{ font-family:var(--mono); font-size:12px; color:var(--ink3); flex:none;
+  border:1px solid var(--line2); background:var(--bg); padding:5px 10px; letter-spacing:.06em; }
+.doc-head h1{ font-family:var(--serif); font-weight:500; font-size:calc(var(--fs)*1.6); line-height:1.18;
+  margin:0 0 calc(var(--u)*1.5); letter-spacing:-0.015em; text-transform:none; }
 .doc-desc{ font-family:var(--serif); font-size:calc(var(--fs)*1.0); line-height:var(--lh); color:var(--ink2);
-  margin:0 0 calc(var(--u)*2); max-width:62ch; text-wrap:pretty; }
+  margin:0 0 calc(var(--u)*2); max-width:62ch; text-wrap:pretty; overflow-wrap:anywhere; }
 .doc-meta{ display:flex; flex-wrap:wrap; gap:16px; }
-.chip{ display:inline-flex; align-items:center; gap:6px; font-family:var(--serif); font-size:12.5px;
-  color:var(--ink2); background:none; border:none; padding:0; }
+.chip{ display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10.5px;
+  text-transform:uppercase; letter-spacing:.05em; color:var(--ink2); background:none; border:1px solid var(--line2);
+  padding:2px 8px; }
 
 .doc-bar{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
   margin:calc(var(--u)*3) 0 calc(var(--u)*1.5); padding:calc(var(--u)*0.5) 0; }
@@ -188,17 +203,23 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 
 .ver-note{ font-family:var(--serif); font-size:calc(var(--fs)*0.94); font-style:italic; color:var(--ink2);
   background:color-mix(in oklab, var(--accent) 6%, var(--paper)); border-left:2px solid var(--accent);
-  padding:calc(var(--u)*1.2) calc(var(--u)*1.8); margin:calc(var(--u)*1.5) 0 calc(var(--u)*3); }
+  padding:calc(var(--u)*1.2) calc(var(--u)*1.8); margin:calc(var(--u)*1.5) 0 calc(var(--u)*3); overflow-wrap:anywhere; }
 .ver-note-tag{ font-family:var(--mono); font-style:normal; font-size:10.5px; color:var(--paper);
   background:var(--accent); padding:1px 5px; margin-right:9px; font-weight:500; letter-spacing:.02em; }
 
 .block{ margin-top:calc(var(--u)*3); }
-.block-h{ font-family:var(--serif); font-size:11.5px; letter-spacing:.04em; text-transform:uppercase;
-  color:var(--accent); margin:0 0 calc(var(--u)*1.2); font-weight:500; }
+.block-h{ display:flex; align-items:center; gap:9px; font-family:var(--serif); font-size:11.5px; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--accent); margin:0 0 calc(var(--u)*1.2); font-weight:500; }
+/* ritningslinje som fyller resten av raden */
+.block-h::after{ content:""; flex:1; align-self:center; border-top:1px solid var(--line2); opacity:.55; }
 
 .ing-list{ list-style:none; margin:0; padding:0; }
-.ing-row{ position:relative; display:grid; grid-template-columns:62px 50px 1fr auto; align-items:baseline;
+.ing-row{ position:relative; display:grid; grid-template-columns:38px 58px 48px 1fr auto; align-items:baseline;
   padding:calc(var(--u)*0.85) 0; border-bottom:1px solid color-mix(in oklab, var(--line) 55%, transparent); }
+.ing-idx{ font-family:var(--mono); font-size:calc(var(--fs)*0.66); color:var(--ink3);
+  padding-top:.15em; flex:none; }
+.ing-n{ font-family:var(--serif); font-size:var(--fs); color:var(--ink); overflow-wrap:anywhere; }
+.ing-note{ color:var(--ink3); font-style:italic; overflow-wrap:anywhere; }
 .anno-add{ justify-self:end; align-self:baseline; white-space:nowrap;
   font-family:var(--serif); font-size:11px; color:var(--ink3);
   border:none; background:none; padding:0 0 0 16px;
@@ -207,10 +228,10 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 .anno-add.has{ color:var(--ink2); }
 .ing-anno, .step-anno{ padding:2px 0 2px 11px; border-left:2px solid var(--accent);
   font-family:var(--serif); font-size:calc(var(--fs)*0.82); line-height:1.5; color:var(--ink2);
-  max-width:62ch; cursor:text; text-wrap:pretty; }
-.ing-anno{ margin:0 0 calc(var(--u)*0.7) 112px; }
+  max-width:62ch; cursor:text; text-wrap:pretty; overflow-wrap:anywhere; }
+.ing-anno{ margin:0 0 calc(var(--u)*0.7) 152px; }
 .step-anno{ margin:5px 0 0; }
-.ing-item > .anno-edit{ margin:1px 0 calc(var(--u)*0.7) 112px; }
+.ing-item > .anno-edit{ margin:1px 0 calc(var(--u)*0.7) 152px; }
 .step-main .anno-edit{ margin:5px 0 0; }
 .anno-edit input{ width:min(62ch,100%); font-family:var(--serif); font-size:calc(var(--fs)*0.8);
   color:var(--ink); background:var(--bg); border:none; border-left:2px solid var(--accent);
@@ -232,7 +253,7 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 .step-num{ font-family:var(--mono); font-size:calc(var(--fs)*0.8); color:var(--ink3); font-weight:500;
   padding-top:.25em; flex:none; opacity:1; }
 .step-txt{ font-family:var(--serif); font-size:var(--fs); line-height:var(--lh); color:var(--ink);
-  text-wrap:pretty; }
+  text-wrap:pretty; overflow-wrap:anywhere; }
 
 /* ---- diff ---- */
 .diff{ display:flex; flex-direction:column; min-height:100%; }
@@ -259,13 +280,14 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 .df-pair{ display:grid; grid-template-columns:1fr 1fr; }
 .df-line{ display:flex; gap:10px; padding:calc(var(--u)*0.7) calc(var(--u)*2.5); min-height:1.6em;
   border-bottom:1px solid color-mix(in oklab,var(--line) 32%, transparent);
-  font-family:var(--serif); font-size:calc(var(--fs)*0.95); line-height:1.5; }
+  font-family:var(--serif); font-size:calc(var(--fs)*0.95); line-height:1.5; min-width:0; }
 .df-pair > .df-line:first-child{ border-right:1px solid var(--line); }
 .df-mark{ font-family:var(--mono); font-size:.85em; width:.9em; flex:none; opacity:.8; }
 .df-add{ background:var(--add-bg); } .df-add .df-mark{ color:var(--add-fg); }
 .df-del{ background:var(--del-bg); } .df-del .df-mark{ color:var(--del-fg); }
 .df-del .df-text{ text-decoration:line-through; text-decoration-color:var(--ink3); color:var(--ink2); }
 .df-chg{ background:var(--chg-bg); } .df-chg .df-mark{ color:var(--chg-fg); }
+.df-text{ overflow-wrap:anywhere; }
 .df-empty{ background:transparent; }
 .df-notes{ border-bottom:1px solid var(--line); }
 .df-note-cell{ padding:calc(var(--u)*1.2) calc(var(--u)*2.5); font-family:var(--serif); font-style:italic;
@@ -278,10 +300,14 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
   text-transform:none; letter-spacing:-0.01em; }
 .lib-sub{ font-family:var(--serif); font-size:calc(var(--fs)*0.95); color:var(--ink2); max-width:80ch;
   margin:0 0 calc(var(--u)*2.5); line-height:1.5; }
-.lib-table-wrap{ border:none; overflow:hidden; background:var(--paper); }
+.lib-table-wrap{ border:none; overflow-x:auto; overscroll-behavior-x:contain; background:var(--paper); }
 .lib-table{ width:100%; border-collapse:collapse; font-size:13px; }
 .lib-table th{ text-align:left; font-family:var(--serif); font-size:10.5px; letter-spacing:.04em;
-  text-transform:uppercase; color:var(--ink3); padding:11px 14px; background:var(--bg); font-weight:500; }
+  text-transform:uppercase; color:var(--ink3); padding:11px 14px; background:var(--bg); font-weight:500;
+  border-bottom:2px solid var(--ink3); }
+/* tekniska kolumnlinjer */
+.lib-table th:not(:last-child), .lib-table td:not(:last-child){
+  border-right:1px solid color-mix(in oklab, var(--line) 55%, transparent); }
 .lib-table td{ padding:8px 14px; vertical-align:middle; }
 .lib-table tbody tr:nth-child(even) td{ background:color-mix(in oklab, var(--ink) 2.5%, transparent); }
 .lib-table tr:hover td{ background:color-mix(in oklab, var(--accent) 6%, transparent); }
@@ -295,7 +321,8 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 .recipe-links{ display:flex; flex-direction:column; align-items:flex-start; gap:5px; }
 .recipe-link{ display:inline-block; max-width:100%; font-family:var(--serif); font-size:12px;
   color:var(--ink2); text-align:left; line-height:1.3; border:none; background:none; padding:1px 0;
-  text-decoration:underline; text-decoration-color:var(--line2); text-underline-offset:2px; transition:.12s; }
+  text-decoration:underline; text-decoration-color:var(--line2); text-underline-offset:2px; transition:.12s;
+  overflow-wrap:anywhere; }
 .recipe-link:hover{ color:var(--accent); text-decoration-color:var(--accent); }
 .id-none{ color:var(--ink3); }
 .pan-toggle{ width:22px; height:22px; border:1.5px solid var(--line2); display:inline-grid;
@@ -357,12 +384,10 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 .plan-item.is-pantry .pi-qty, .plan-item.is-pantry .pi-name{ color:var(--ink3); }
 
 /* ---- kommandopalett ---- */
-.cmd-overlay{ position:fixed; inset:0; background:color-mix(in oklab, var(--ink) 35%, transparent);
-  display:flex; align-items:flex-start; justify-content:center; padding-top:14vh; z-index:200;
-  backdrop-filter:blur(2px); }
+.cmd-overlay{ position:fixed; inset:0; background:color-mix(in oklab, var(--ink) 45%, transparent);
+  display:flex; align-items:flex-start; justify-content:center; padding-top:14vh; z-index:200; }
 .cmd-overlay[hidden]{ display:none; }
-.cmd-box{ width:min(560px,90vw); background:var(--paper); border:none;
-  box-shadow:0 18px 48px -20px color-mix(in oklab,var(--ink) 55%, transparent); overflow:hidden; }
+.cmd-box{ width:min(560px,90vw); background:var(--paper); border:1px solid var(--ink3); overflow:hidden; }
 .cmd-input{ display:flex; align-items:center; gap:11px; padding:14px 16px; color:var(--ink3);
   border-bottom:1px solid var(--line); }
 .cmd-input input{ flex:1; border:none; background:none; outline:none; font-family:var(--serif); font-size:18px;
@@ -455,9 +480,11 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
   .welcome-mark{ font-size:48px; letter-spacing:-1px; }
   .lib{ padding:calc(var(--u)*2) calc(var(--u)*1.5) calc(var(--u)*6); }
   /* ing-row: kompaktare kolumner, annotation drar in helt vänster. */
+  .ing-idx{ display:none; }
   .ing-row{ grid-template-columns:auto auto 1fr auto; gap:6px; }
   .ing-q{ padding-right:6px; }
   .ing-anno, .ing-item > .anno-edit{ margin-left:0; }
+  .anno-add{ font-size:10px; }
 }
 
 /* ===== Riktig telefonlayout: göm rail, bottom-tab-bar ===== */
@@ -492,7 +519,6 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 
   /* doc/lib får full bredd */
   .doc{ max-width:none; }
-  .lib-table-wrap{ overflow-x:auto; }
   .lib-table{ min-width:560px; }
 }
 /* Bottom-tab-bar visas bara på telefon. */
@@ -511,8 +537,8 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
 
 /* ---- tillagningsstatus (cook_log) ---- */
 :root{
-  --cook-cooked-fg: oklch(0.46 0.075 158);
-  --cook-cooked-bg: oklch(0.957 0.024 158);
+  --cook-cooked-fg: oklch(0.50 0.09 140);
+  --cook-cooked-bg: oklch(0.94 0.045 140);
 }
 /* filterpiller i utforskaren */
 .exp-filter{ display:flex; flex-wrap:wrap; gap:4px; margin:0 12px 10px; }
@@ -581,7 +607,8 @@ textarea:focus-visible, [tabindex]:focus-visible{
 .rail-brand{ width:34px; height:34px; display:grid; place-items:center;
   background:var(--paper); color:var(--ink); font-family:var(--mono);
   font-size:17px; font-weight:500; letter-spacing:-1px;
-  border:1px solid color-mix(in oklab, var(--paper) 30%, transparent); }
+  border:1px solid color-mix(in oklab, var(--paper) 30%, transparent);
+  clip-path:polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%); }
 .rail-brand:hover{ color:var(--accent); }
 
 /* ---- taktilare chips & knappar ---- */
@@ -591,8 +618,8 @@ textarea:focus-visible, [tabindex]:focus-visible{
 .chip-btn.on{ background:var(--accent); border-color:var(--accent); color:var(--paper); }
 .btn-primary{ font-family:var(--mono); font-size:12px; font-weight:500;
   text-transform:uppercase; letter-spacing:.08em; border:none;
-  padding:11px 20px; transition:.12s; }
-.btn-primary:hover{ background:var(--ink); }
+  background:var(--ink); color:var(--paper); padding:11px 20px; transition:.12s; clip-path:polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%); }
+.btn-primary:hover{ background:var(--accent); }
 .btn-primary:active{ transform:translateY(1px); }
 .errbox{ border:1px solid color-mix(in oklab, #9b3a3a 40%, var(--line2));
   border-left:3px solid #9b3a3a; background:color-mix(in oklab, #9b3a3a 6%, var(--paper));
@@ -604,9 +631,7 @@ textarea:focus-visible, [tabindex]:focus-visible{
 /* ---- receptdokument: numrerade blockrubriker ---- */
 .block-h{ display:flex; align-items:center; gap:9px; }
 .bh-n{ font-family:var(--mono); font-size:10px; color:var(--ink3);
-  border:1px solid var(--line2); padding:1px 5px; letter-spacing:.05em; }
-.doc-head{ padding-bottom:calc(var(--u)*2); border-bottom:1px solid var(--line);
-  margin-bottom:calc(var(--u)*1.5); }
+  border:1px solid var(--line2); background:var(--bg); padding:1px 5px; letter-spacing:.05em; }
 .doc-head h1{ letter-spacing:-0.015em; }
 
 /* ---- skapa/redigera-formulär ---- */
@@ -645,18 +670,20 @@ textarea:focus-visible, [tabindex]:focus-visible{
 .row{ display:grid; grid-template-columns:1fr 1fr; gap:0 calc(var(--u)*3); }
 .ef-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 
-/* ---- ingrediensredigerare ---- */
+/* ---- ingrediensredigerare (formulär) ----
+   OBS: alla .ing-row-regler här är scoped till .ing-editor —
+   .ing-row används även i receptdokumentet och får inte krocka. */
 .ing-editor{ border:1px solid var(--line); background:var(--panel); }
 .ing-ed-head{ display:grid; grid-template-columns:80px 92px 1.25fr 1fr 36px; gap:10px;
   padding:9px 12px; border-bottom:1px solid var(--line);
   font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase;
-  color:var(--ink3); }
+  color:var(--ink3); background:var(--bg); }
 .ing-ed-rows{ padding:0; }
-.ing-row{ display:grid; grid-template-columns:80px 92px 1.25fr 1fr 36px; gap:10px;
+.ing-editor .ing-row{ display:grid; grid-template-columns:80px 92px 1.25fr 1fr 36px; gap:10px;
   padding:9px 12px; border-bottom:1px solid color-mix(in oklab, var(--line) 55%, transparent);
   position:relative; align-items:center; }
-.ing-row:last-child{ border-bottom:none; }
-.ing-row.bad{ background:color-mix(in oklab, #9b3a3a 5%, transparent); }
+.ing-editor .ing-row:last-child{ border-bottom:none; }
+.ing-editor .ing-row.bad{ background:color-mix(in oklab, #9b3a3a 5%, transparent); }
 .ing-f{ background:transparent; border:none; border-bottom:1px solid transparent;
   padding:6px 2px; font-family:var(--serif); font-size:var(--fs); color:var(--ink);
   outline:none; min-width:0; width:100%; transition:border-color .12s; }
@@ -670,7 +697,7 @@ textarea:focus-visible, [tabindex]:focus-visible{
 .ing-f-del:hover{ color:#9b3a3a; border-color:color-mix(in oklab, #9b3a3a 30%, var(--line2)); }
 .ing-f-warn{ display:none; grid-column:1 / -1; font-family:var(--mono); font-size:10.5px;
   color:#9b3a3a; padding:1px 2px 0; }
-.ing-row.bad .ing-f-warn{ display:block; }
+.ing-editor .ing-row.bad .ing-f-warn{ display:block; }
 .ing-ed-foot{ display:flex; align-items:center; gap:16px; padding:10px 12px; }
 .ing-status{ font-family:var(--mono); font-size:11px; color:var(--ink3); }
 .ing-status.err{ color:#9b3a3a; }
@@ -678,8 +705,7 @@ textarea:focus-visible, [tabindex]:focus-visible{
 /* ---- formulärets actions-rad (sticky) ---- */
 .form-actions{ position:sticky; bottom:0; z-index:20; display:flex; align-items:center;
   justify-content:space-between; gap:16px; flex-wrap:wrap;
-  background:color-mix(in oklab, var(--paper) 92%, transparent);
-  backdrop-filter:blur(4px); border-top:1px solid var(--line);
+  background:var(--paper); border-top:1px solid var(--ink);
   padding:14px 0 calc(var(--u)*2); margin-top:calc(var(--u)*4); }
 .fa-left{ display:flex; align-items:center; gap:8px; }
 .fa-hint{ font-family:var(--serif); font-size:11.5px; color:var(--ink3); }
@@ -728,7 +754,7 @@ textarea:focus-visible, [tabindex]:focus-visible{
   .ef-head{ flex-direction:column; gap:8px; }
   .row{ grid-template-columns:1fr; }
   .ing-ed-head{ display:none; }
-  .ing-row{ grid-template-columns:1fr 1fr 32px; gap:6px 10px; padding:10px 8px; }
+  .ing-editor .ing-row{ grid-template-columns:1fr 1fr 32px; gap:6px 10px; padding:10px 8px; }
   .ing-f-amt{ grid-column:1; }
   .ing-f-unit{ grid-column:2; }
   .ing-f-del{ grid-column:3; grid-row:1; }
