@@ -558,3 +558,187 @@ kbd{ font-family:var(--mono); font-size:.85em; background:var(--bg); border:1px 
   outline:none; }
 .cook-form-notes:focus{ border-color:var(--accent); }
 .cook-form-actions{ display:flex; gap:14px; }
+
+/* ============================================================
+   UI 2.0 — industripolish (ticket #13)
+   - Skapa/redigera-formulär med strukturerad ingrediensredigerare
+   - Starkare fokus-ringar, taktilare chips/knappar, numbered blocks
+   - Unified diff på mobil
+   ============================================================ */
+
+/* färgschema + fokus */
+:root{ color-scheme:light; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible,
+textarea:focus-visible, [tabindex]:focus-visible{
+  outline:2px solid color-mix(in oklab, var(--accent) 75%, transparent);
+  outline-offset:1px; }
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{ transition:none !important; animation:none !important; }
+}
+
+/* ---- rail-brand ---- */
+.rail{ gap:10px; }
+.rail-brand{ width:34px; height:34px; display:grid; place-items:center;
+  background:var(--paper); color:var(--ink); font-family:var(--mono);
+  font-size:17px; font-weight:500; letter-spacing:-1px;
+  border:1px solid color-mix(in oklab, var(--paper) 30%, transparent); }
+.rail-brand:hover{ color:var(--accent); }
+
+/* ---- taktilare chips & knappar ---- */
+.chip{ border:1px solid var(--line2); padding:2px 8px; }
+.chip-btn{ cursor:pointer; transition:.12s; user-select:none; }
+.chip-btn:hover{ border-color:var(--ink3); color:var(--ink); }
+.chip-btn.on{ background:var(--accent); border-color:var(--accent); color:var(--paper); }
+.btn-primary{ font-family:var(--mono); font-size:12px; font-weight:500;
+  text-transform:uppercase; letter-spacing:.08em; border:none;
+  padding:11px 20px; transition:.12s; }
+.btn-primary:hover{ background:var(--ink); }
+.btn-primary:active{ transform:translateY(1px); }
+.errbox{ border:1px solid color-mix(in oklab, #9b3a3a 40%, var(--line2));
+  border-left:3px solid #9b3a3a; background:color-mix(in oklab, #9b3a3a 6%, var(--paper));
+  color:var(--ink); padding:12px 16px; margin-bottom:calc(var(--u)*3);
+  font-family:var(--serif); font-size:13.5px; line-height:1.5; }
+.errbox strong{ color:#9b3a3a; }
+.errbox a{ color:var(--accent); text-decoration:underline; text-underline-offset:2px; }
+
+/* ---- receptdokument: numrerade blockrubriker ---- */
+.block-h{ display:flex; align-items:center; gap:9px; }
+.bh-n{ font-family:var(--mono); font-size:10px; color:var(--ink3);
+  border:1px solid var(--line2); padding:1px 5px; letter-spacing:.05em; }
+.doc-head{ padding-bottom:calc(var(--u)*2); border-bottom:1px solid var(--line);
+  margin-bottom:calc(var(--u)*1.5); }
+.doc-head h1{ letter-spacing:-0.015em; }
+
+/* ---- skapa/redigera-formulär ---- */
+.editform{ max-width:820px; margin:0 auto; padding:calc(var(--u)*4) calc(var(--u)*5) calc(var(--u)*10); }
+.ef-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+  margin-bottom:calc(var(--u)*3.5); }
+.ef-head h1{ font-family:var(--serif); font-weight:500; font-size:calc(var(--fs)*1.55);
+  line-height:1.18; margin:0 0 6px; letter-spacing:-0.015em; }
+.ef-sub{ font-family:var(--serif); font-size:12.5px; color:var(--ink3); margin:0; max-width:60ch; }
+.ef-badge{ font-family:var(--mono); font-size:10.5px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--accent); border:1px solid color-mix(in oklab, var(--accent) 40%, var(--line2));
+  padding:3px 8px; white-space:nowrap; }
+.ef-sec{ margin-bottom:calc(var(--u)*4.5); padding-top:calc(var(--u)*2.5);
+  border-top:1px solid var(--line); }
+.ef-sec-h{ display:flex; align-items:center; gap:10px; font-family:var(--serif);
+  font-size:11.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--accent);
+  margin:0 0 calc(var(--u)*2); font-weight:500; }
+.ef-sec-n{ font-family:var(--mono); font-size:10px; color:var(--ink3);
+  border:1px solid var(--line2); padding:1px 5px; letter-spacing:.05em; }
+.ef-hint{ font-family:var(--serif); font-size:12.5px; color:var(--ink3);
+  margin:0 0 calc(var(--u)*2); line-height:1.55; }
+.ef-hint a{ color:var(--accent); text-decoration:underline; text-underline-offset:2px; }
+.field{ margin-bottom:calc(var(--u)*2.5); min-width:0; }
+.field label{ display:block; font-family:var(--mono); font-size:11px; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--ink2); margin-bottom:7px; font-weight:500; }
+.lbl-note{ text-transform:none; letter-spacing:0; color:var(--ink3); font-size:10.5px; }
+.req{ color:var(--accent); font-style:normal; }
+.field input[type="text"], .field textarea{
+  width:100%; background:var(--paper); border:none; border-bottom:1px solid var(--line2);
+  padding:9px 2px; font-family:var(--serif); font-size:var(--fs); color:var(--ink);
+  outline:none; transition:border-color .12s, box-shadow .12s; }
+.field input[type="text"]:hover, .field textarea:hover{ border-bottom-color:var(--ink3); }
+.field input[type="text"]:focus, .field textarea:focus{ border-bottom-color:var(--accent);
+  box-shadow:inset 0 -1px 0 var(--accent); }
+.field textarea{ resize:vertical; line-height:1.55; }
+.row{ display:grid; grid-template-columns:1fr 1fr; gap:0 calc(var(--u)*3); }
+.ef-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+
+/* ---- ingrediensredigerare ---- */
+.ing-editor{ border:1px solid var(--line); background:var(--panel); }
+.ing-ed-head{ display:grid; grid-template-columns:80px 92px 1.25fr 1fr 36px; gap:10px;
+  padding:9px 12px; border-bottom:1px solid var(--line);
+  font-family:var(--mono); font-size:10px; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--ink3); }
+.ing-ed-rows{ padding:0; }
+.ing-row{ display:grid; grid-template-columns:80px 92px 1.25fr 1fr 36px; gap:10px;
+  padding:9px 12px; border-bottom:1px solid color-mix(in oklab, var(--line) 55%, transparent);
+  position:relative; align-items:center; }
+.ing-row:last-child{ border-bottom:none; }
+.ing-row.bad{ background:color-mix(in oklab, #9b3a3a 5%, transparent); }
+.ing-f{ background:transparent; border:none; border-bottom:1px solid transparent;
+  padding:6px 2px; font-family:var(--serif); font-size:var(--fs); color:var(--ink);
+  outline:none; min-width:0; width:100%; transition:border-color .12s; }
+.ing-f:hover{ border-bottom-color:var(--line2); }
+.ing-f:focus{ border-bottom-color:var(--accent); }
+.ing-f-amt{ font-family:var(--mono); text-align:right; color:var(--ink2); }
+.ing-f-unit{ font-family:var(--mono); color:var(--ink2); }
+.ing-row.bad .ing-f-name{ border-bottom-color:#9b3a3a; }
+.ing-f-del{ width:28px; height:28px; justify-self:end; display:grid; place-items:center;
+  color:var(--ink3); font-size:17px; line-height:1; border:1px solid transparent; }
+.ing-f-del:hover{ color:#9b3a3a; border-color:color-mix(in oklab, #9b3a3a 30%, var(--line2)); }
+.ing-f-warn{ display:none; grid-column:1 / -1; font-family:var(--mono); font-size:10.5px;
+  color:#9b3a3a; padding:1px 2px 0; }
+.ing-row.bad .ing-f-warn{ display:block; }
+.ing-ed-foot{ display:flex; align-items:center; gap:16px; padding:10px 12px; }
+.ing-status{ font-family:var(--mono); font-size:11px; color:var(--ink3); }
+.ing-status.err{ color:#9b3a3a; }
+
+/* ---- formulärets actions-rad (sticky) ---- */
+.form-actions{ position:sticky; bottom:0; z-index:20; display:flex; align-items:center;
+  justify-content:space-between; gap:16px; flex-wrap:wrap;
+  background:color-mix(in oklab, var(--paper) 92%, transparent);
+  backdrop-filter:blur(4px); border-top:1px solid var(--line);
+  padding:14px 0 calc(var(--u)*2); margin-top:calc(var(--u)*4); }
+.fa-left{ display:flex; align-items:center; gap:8px; }
+.fa-hint{ font-family:var(--serif); font-size:11.5px; color:var(--ink3); }
+.fa-btns{ display:flex; align-items:center; gap:18px; }
+.link-del{ font-family:var(--serif); font-size:12.5px; color:#9b3a3a;
+  border:none; border-bottom:1px solid color-mix(in oklab, #9b3a3a 30%, transparent);
+  background:none; padding:4px 2px; }
+.link-del:hover{ border-bottom-color:#9b3a3a; }
+
+/* ---- edit-skal: meta-panel ---- */
+.ef-meta{ padding:14px; }
+.ef-meta-title{ font-family:var(--serif); font-size:13.5px; color:var(--ink2);
+  margin:0 0 12px; line-height:1.45; }
+.ef-meta-row{ display:flex; justify-content:space-between; gap:10px;
+  font-family:var(--mono); font-size:11px; color:var(--ink3);
+  border-bottom:1px solid var(--line); padding:5px 0; margin-bottom:12px; }
+.ef-meta-k{ text-transform:uppercase; letter-spacing:.04em; }
+.editform .field input[type="text"]{ font-size:16px; }
+
+/* ---- unified diff på mobil (≤900px) ---- */
+.df-side-tag{ display:none; }
+@media (max-width:900px){
+  /* en kolumn: samma-rad visar bara vänster, add/del bara sin sida,
+     chg staplar båda med versionsetiketter */
+  .df-pair.type-same > .df-line:last-child{ display:none; }
+  .df-pair.type-same > .df-line:first-child{ border-bottom:1px solid
+    color-mix(in oklab, var(--line) 40%, transparent); }
+  .df-line{ padding:10px calc(var(--u)*2); }
+  .df-side-tag{ display:inline-flex; font-family:var(--mono); font-size:9.5px;
+    color:var(--ink3); border:1px solid var(--line2); background:var(--paper);
+    padding:0 4px; margin-left:auto; flex:none; align-self:center; }
+  .diff-counts{ gap:8px; font-size:10.5px; width:100%; justify-content:space-between; }
+  .diff-top{ padding:calc(var(--u)*1.4) calc(var(--u)*1.8); }
+  .diff-cols-h{ position:static; }
+  .df-sec-h{ padding:calc(var(--u)*1.2) calc(var(--u)*1.8); }
+  .df-note-cell{ padding:calc(var(--u)*1) calc(var(--u)*1.8); font-size:calc(var(--fs)*0.85); }
+}
+@media (max-width:480px){
+  .diff-title{ font-size:calc(var(--fs)*0.95); }
+}
+
+/* ---- mobil: tabbar-indikator + formular ---- */
+@media (max-width:480px){
+  .mobile-tabbar a.active{ border-top:2px solid var(--paper); }
+  .editform{ padding:calc(var(--u)*3) calc(var(--u)*2) calc(var(--u)*8); }
+  .ef-head{ flex-direction:column; gap:8px; }
+  .row{ grid-template-columns:1fr; }
+  .ing-ed-head{ display:none; }
+  .ing-row{ grid-template-columns:1fr 1fr 32px; gap:6px 10px; padding:10px 8px; }
+  .ing-f-amt{ grid-column:1; }
+  .ing-f-unit{ grid-column:2; }
+  .ing-f-del{ grid-column:3; grid-row:1; }
+  .ing-f-name{ grid-column:1 / 3; }
+  .ing-f-note{ grid-column:1 / 3; }
+  .ing-f-warn{ grid-column:1 / -1; }
+  .form-actions{ padding:12px 0; }
+  .form-actions .fa-left{ display:none; }
+  .fa-btns{ width:100%; justify-content:space-between; }
+}
+@media (max-width:720px){
+  .editform{ padding-left:calc(var(--u)*2.5); padding-right:calc(var(--u)*2.5); }
+}

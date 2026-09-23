@@ -162,12 +162,14 @@ def apply_recipe_edit(conn, recipe_id, new_state, change_note=None,
     if not cur_recipe:
         raise RecipeNotFound(f"Recipe {recipe_id} not found")
 
-    cur_ings = conn.execute(text('''
+    cur_ings = [dict(r) for r in conn.execute(text('''
         SELECT i.id AS ingredient_id, i.name, ri.amount, ri.unit, ri.note
         FROM recipe_ingredient ri
         JOIN ingredient i ON ri.ingredient_id = i.id
         WHERE ri.recipe_id = :id
-    '''), {'id': recipe_id}).mappings().all()
+    '''), {'id': recipe_id}).mappings().all()]
+    for _ing in cur_ings:
+        _ing['amount'] = _fmt_amount(_ing['amount'])
 
     current_version = conn.execute(
         text("SELECT COALESCE(MAX(version_number),0) FROM recipe_version WHERE recipe_id=:id"),
@@ -313,12 +315,14 @@ def create_recipe(conn, new_state, changed_by='chat'):
             'note': ing.get('note', '') or '',
         })
 
-    new_ings = conn.execute(text('''
+    new_ings = [dict(r) for r in conn.execute(text('''
         SELECT i.id AS ingredient_id, i.name, ri.amount, ri.unit, ri.note
         FROM recipe_ingredient ri
         JOIN ingredient i ON ri.ingredient_id = i.id
         WHERE ri.recipe_id = :id
-    '''), {'id': recipe_id}).mappings().all()
+    '''), {'id': recipe_id}).mappings().all()]
+    for _ing in new_ings:
+        _ing['amount'] = _fmt_amount(_ing['amount'])
 
     conn.execute(text('''
         INSERT INTO recipe_version
@@ -427,6 +431,17 @@ def _ide_render(mode, **kwargs):
 @app.route('/')
 def ide_home():
     return _ide_render('recept')
+
+
+@app.route('/sw.js')
+def service_worker():
+    """Service worker med rot-scope — Flask servar statiska filer under
+    /static/, men SW:n måste nå hela appen. Service-Worker-Allowed ger
+    det utan att flytta filen."""
+    resp = app.send_static_file('sw.js')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
 
 
 @app.route('/ingredients', methods=['GET', 'POST'])
@@ -568,7 +583,7 @@ def _load_recipe_for_view(conn, recipe_id, version_number=None):
                 gc, ks = cat_map.get(name, (None, 0))
                 ingredients.append({
                     'name': name,
-                    'amount': ing.get('amount', ''),
+                    'amount': _fmt_amount(ing.get('amount', '')),
                     'unit': ing.get('unit', ''),
                     'note': ing.get('note', ''),
                     'grocery_category': gc,
@@ -588,6 +603,8 @@ def _load_recipe_for_view(conn, recipe_id, version_number=None):
             ORDER BY i.grocery_category, i.name
         '''), {'id': recipe_id}).mappings().all()
         ingredients = [dict(r) for r in ing_rows]
+        for _ing in ingredients:
+            _ing['amount'] = _fmt_amount(_ing['amount'])
 
     steps = _parse_steps(recipe['instructions'])
 
@@ -658,6 +675,11 @@ def frag_recipe_diff(recipe_id):
         ings_b_list = json.loads((ver_b or {}).get('ingredients_json') or '[]') if ver_b else []
     except (TypeError, ValueError):
         ings_a_list, ings_b_list = [], []
+    # Normalisera REAL-mängder (200.0 → "200") innan jämförelse + visning.
+    for _list in (ings_a_list, ings_b_list):
+        for _ing in _list:
+            if isinstance(_ing, dict):
+                _ing['amount'] = _fmt_amount(_ing.get('amount', ''))
     ings_a = {(i.get('name') or '').lower(): i for i in ings_a_list}
     ings_b = {(i.get('name') or '').lower(): i for i in ings_b_list}
     ing_rows = []
@@ -960,146 +982,213 @@ def _parse_ingredients_textarea(raw):
     return rows
 
 
+def _fmt_amount(v):
+    """SQLite lagrar amount som REAL — 2.0 ska visas som '2', inte '2.0'."""
+    if v is None:
+        return ''
+    try:
+        f = float(v)
+        if f == int(f):
+            return str(int(f))
+        return str(f).rstrip('0').rstrip('.')
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def _ingredients_payload(form):
+    """Read structured ingredient rows from the (new) edit form.
+    Primary: ingredients_json — list of {amount, unit, name, note}.
+    Fallback: legacy 'amount unit name' textarea (gamla bokmärken/formulär)."""
+    raw = (form.get('ingredients_json') or '').strip()
+    if raw:
+        try:
+            rows = json.loads(raw)
+        except ValueError:
+            rows = []
+        out = []
+        for r in rows if isinstance(rows, list) else []:
+            if not isinstance(r, dict):
+                continue
+            name = (r.get('name') or '').strip()
+            if not name:
+                continue
+            out.append({
+                'name': name,
+                'amount': str(r.get('amount') or '').strip(),
+                'unit': (r.get('unit') or '').strip(),
+                'note': (r.get('note') or '').strip(),
+            })
+        return out
+    return _parse_ingredients_textarea(form.get('ingredients', ''))
+
+
+def _unknown_ingredients(conn, ings):
+    """All names som inte matchar katalogen — på en gång, så formuläret kan
+    lista varje problem istället för att faila på första raden."""
+    return [ing['name'] for ing in ings
+            if ing.get('name') and not _resolve_ingredient_id(conn, ing['name'])]
+
+
+def _ingredient_rows_for_form(conn, recipe_id):
+    rows = conn.execute(text('''
+        SELECT i.name, ri.amount, ri.unit, ri.note
+        FROM recipe_ingredient ri
+        JOIN ingredient i ON ri.ingredient_id = i.id
+        WHERE ri.recipe_id = :id
+        ORDER BY ri.id
+    '''), {'id': recipe_id}).mappings().all()
+    return [{
+        'name': r['name'],
+        'amount': _fmt_amount(r['amount']),
+        'unit': r['unit'] or '',
+        'note': r['note'] or '',
+    } for r in rows]
+
+
+def _catalog_payload(conn):
+    """Komplett ingredienskatalog för formulärets datalistor + klientvalidering."""
+    rows = conn.execute(text('''
+        SELECT name, default_unit, grocery_category, aliases
+        FROM ingredient ORDER BY name
+    ''')).mappings().all()
+    return [{
+        'name': r['name'],
+        'default_unit': r['default_unit'] or '',
+        'category': r['grocery_category'] or '',
+        'aliases': json.loads(r['aliases'] or '[]'),
+    } for r in rows]
+
+
+
 @app.route('/recipe/<int:recipe_id>/edit', methods=['GET', 'POST'])
 def edit_recipe(recipe_id):
 
-    with engine.begin() as conn:
-        if request.method == 'POST':
-            new_state = {
-                'title': request.form['title'],
-                'description': request.form['description'],
-                'instructions': request.form['instructions'],
-                'notes': request.form['notes'],
-                'kitchen': request.form.get('kitchen', ''),
-                'type': request.form.get('type', ''),
-                'tags': request.form['tags'],
-                'ingredients': _parse_ingredients_textarea(request.form['ingredients']),
-            }
+    if request.method == 'POST':
+        ings = _ingredients_payload(request.form)
+        new_state = {
+            'title': (request.form.get('title') or '').strip(),
+            'description': request.form.get('description', ''),
+            'instructions': request.form.get('instructions', ''),
+            'notes': request.form.get('notes', ''),
+            'kitchen': request.form.get('kitchen', ''),
+            'type': request.form.get('type', ''),
+            'tags': request.form.get('tags', ''),
+            'ingredients': ings,
+        }
+        change_note = (request.form.get('change_note') or '').strip() or None
 
-            _backup_before_edit(note=f"web-{recipe_id}")
-            try:
+        # Re-rendrar med användarens egna värden vid fel — aldrig tyst förlora input.
+        form_values = {**new_state, 'id': recipe_id}
+
+        _backup_before_edit(note=f"web-{recipe_id}")
+        try:
+            with engine.begin() as conn:
+                unknown = _unknown_ingredients(conn, ings)
+                opts = _category_options(conn)
+                catalog = _catalog_payload(conn)
+                version_count = conn.execute(
+                    text("SELECT COUNT(*) FROM recipe_version WHERE recipe_id=:id"),
+                    {'id': recipe_id},
+                ).scalar() or 0
+
+                if unknown:
+                    return render_template(
+                        'edit_recipe.html',
+                        recipe=form_values, ingredients_rows=ings, is_new=False,
+                        error=("Dessa ingredienser finns inte i katalogen: "
+                               + ", ".join(sorted(set(unknown)))
+                               + ". Lägg till dem i ingrediensbiblioteket först."),
+                        options=opts, catalog=catalog,
+                        catalog_json=json.dumps(catalog, ensure_ascii=False),
+                        change_note=change_note or '', version_count=version_count,
+                    ), 400
+
                 apply_recipe_edit(
                     conn, recipe_id, new_state,
-                    change_note=None, changed_by='web',
+                    change_note=change_note, changed_by='web',
                 )
-            except RecipeNotFound:
-                return "Recipe not found", 404
-            except IngredientNotInCatalog as e:
-                recipe = conn.execute(
-                    text("SELECT * FROM recipe WHERE id=:id"), {'id': recipe_id}
-                ).mappings().first()
-                return render_template(
-                    'edit_recipe.html',
-                    recipe=recipe,
-                    ingredients_text=request.form['ingredients'],
-                    is_new=False,
-                    error=str(e),
-                    options=_category_options(conn),
-                ), 400
+        except RecipeNotFound:
+            return "Recipe not found", 404
 
-            return redirect(url_for('recipe_detail', recipe_id=recipe_id))
-        else:
-            recipe = conn.execute(text("SELECT * FROM recipe WHERE id=:id"), {'id': recipe_id}).mappings().first()
-            ingredients = conn.execute(text('''
-                SELECT i.name, ri.amount, ri.unit, ri.note
-                FROM recipe_ingredient ri
-                JOIN ingredient i ON ri.ingredient_id = i.id
-                WHERE ri.recipe_id = :id
-            '''), {'id': recipe_id}).mappings().all()
-            ingredients_text = "\n".join(
-                f"{ing['amount']} {ing['unit']} {ing['name']}".strip()
-                for ing in ingredients
-            )
-            return render_template(
-                'edit_recipe.html',
-                recipe=recipe,
-                ingredients_text=ingredients_text,
-                is_new=False,
-                options=_category_options(conn),
-            )
+        return redirect(url_for('recipe_detail', recipe_id=recipe_id))
+
+    with engine.connect() as conn:
+        recipe = conn.execute(text("SELECT * FROM recipe WHERE id=:id"), {'id': recipe_id}).mappings().first()
+        if not recipe:
+            return "Recipe not found", 404
+        rows = _ingredient_rows_for_form(conn, recipe_id)
+        opts = _category_options(conn)
+        catalog = _catalog_payload(conn)
+        version_count = conn.execute(
+            text("SELECT COUNT(*) FROM recipe_version WHERE recipe_id=:id"),
+            {'id': recipe_id},
+        ).scalar() or 0
+        return render_template(
+            'edit_recipe.html',
+            recipe=recipe, ingredients_rows=rows, is_new=False,
+            options=opts, catalog=catalog,
+            catalog_json=json.dumps(catalog, ensure_ascii=False),
+            change_note='', version_count=version_count,
+        )
 
 @app.route('/recipe/new/edit', methods=['GET', 'POST'])
 def new_recipe():
 
     if request.method == 'POST':
-        title = request.form['title']
-        description = request.form['description']
-        ingredients_text = request.form['ingredients']
-        instructions = request.form['instructions']
-        notes = request.form['notes']
-        kitchen = request.form.get('kitchen', '')
-        type_ = request.form.get('type', '')
-        tags = request.form['tags']
+        ings = _ingredients_payload(request.form)
+        new_state = {
+            'title': (request.form.get('title') or '').strip(),
+            'description': request.form.get('description', ''),
+            'instructions': request.form.get('instructions', ''),
+            'notes': request.form.get('notes', ''),
+            'kitchen': request.form.get('kitchen', ''),
+            'type': request.form.get('type', ''),
+            'tags': request.form.get('tags', ''),
+            'ingredients': ings,
+        }
+        empty_recipe = {
+            'id': None, 'title': new_state['title'], 'description': new_state['description'],
+            'instructions': new_state['instructions'], 'notes': new_state['notes'],
+            'tags': new_state['tags'], 'type': new_state['type'], 'kitchen': new_state['kitchen'],
+        }
 
-        try:
-            with engine.begin() as conn:
-                res = conn.execute(text('''
-                    INSERT INTO recipe (title, description, instructions, notes, kitchen, type, tags)
-                    VALUES (:title, :description, :instructions, :notes, :kitchen, :type, :tags)
-                '''), {
-                    'title': title, 'description': description, 'instructions': instructions,
-                    'notes': notes, 'kitchen': kitchen, 'type': type_, 'tags': tags
-                })
-                recipe_id = res.lastrowid
+        with engine.connect() as conn:
+            unknown = _unknown_ingredients(conn, ings)
+            opts = _category_options(conn)
+            catalog = _catalog_payload(conn)
 
-            for line in ingredients_text.strip().split('\n'):
-                parts = line.strip().split(' ', 2)
-                if len(parts) == 3:
-                    amount, unit, name = parts
-                elif len(parts) == 2:
-                    amount, unit = parts
-                    name = ''
-                elif len(parts) == 1:
-                    amount = parts[0]
-                    unit = ''
-                    name = ''
-                else:
-                    continue
-                ingredient_id = _resolve_ingredient_id(conn, name)
-                if ingredient_id is None:
-                    raise IngredientNotInCatalog(name, ['grocery_category', 'default_unit'])
-                conn.execute(text('''
-                    INSERT INTO recipe_ingredient (recipe_id, ingredient_id, amount, unit, note)
-                    VALUES (:recipe_id, :ingredient_id, :amount, :unit, :note)
-                '''), {
-                    'recipe_id': recipe_id, 'ingredient_id': ingredient_id,
-                    'amount': amount, 'unit': unit, 'note': ''
-                })
-
-            new_ings = conn.execute(text('''
-                SELECT i.id AS ingredient_id, i.name, ri.amount, ri.unit, ri.note
-                FROM recipe_ingredient ri
-                JOIN ingredient i ON ri.ingredient_id = i.id
-                WHERE ri.recipe_id = :id
-            '''), {'id': recipe_id}).mappings().all()
-            conn.execute(text('''
-                INSERT INTO recipe_version
-                    (recipe_id, version_number, title, description, instructions, notes,
-                     tags, type, kitchen, ingredients_json, changed_at, changed_by, change_note)
-                VALUES (:recipe_id, 1, :title, :description, :instructions, :notes,
-                        :tags, :type, :kitchen, :ings_json, :changed_at, 'web', 'Initial version')
-            '''), {
-                'recipe_id': recipe_id, 'title': title, 'description': description,
-                'instructions': instructions, 'notes': notes,
-                'tags': tags, 'type': type_, 'kitchen': kitchen,
-                'ings_json': json.dumps([dict(r) for r in new_ings], ensure_ascii=False),
-                'changed_at': datetime.now(timezone.utc).isoformat(),
-            })
-        except IngredientNotInCatalog as e:
-            empty_recipe = {
-                'id': None, 'title': title, 'description': description,
-                'instructions': instructions, 'notes': notes,
-                'tags': tags, 'type': type_, 'kitchen': kitchen,
-            }
-            with engine.connect() as conn:
-                opts = _category_options(conn)
+        if not new_state['title']:
             return render_template(
-                'edit_recipe.html', recipe=empty_recipe,
-                ingredients_text=ingredients_text, is_new=True,
-                error=str(e), options=opts,
+                'edit_recipe.html', recipe=empty_recipe, ingredients_rows=ings,
+                is_new=True, error='Titel krävs.', options=opts, catalog=catalog,
+                catalog_json=json.dumps(catalog, ensure_ascii=False), change_note='',
             ), 400
 
-        return redirect(url_for('recipe_detail', recipe_id=recipe_id))
+        if unknown:
+            return render_template(
+                'edit_recipe.html', recipe=empty_recipe, ingredients_rows=ings,
+                is_new=True,
+                error=("Dessa ingredienser finns inte i katalogen: "
+                       + ", ".join(sorted(set(unknown)))
+                       + ". Lägg till dem i ingrediensbiblioteket först."),
+                options=opts, catalog=catalog,
+                catalog_json=json.dumps(catalog, ensure_ascii=False), change_note='',
+            ), 400
+
+        # Ett enda transaktionsblock: recept + ingredienslänkar + version 1
+        # rullas tillbaka tillsammans om något går fel (tidigare: stängd
+        # connection + halvt sparade recept).
+        try:
+            with engine.begin() as conn:
+                result = create_recipe(conn, new_state, changed_by='web')
+        except IngredientNotInCatalog as e:
+            return render_template(
+                'edit_recipe.html', recipe=empty_recipe, ingredients_rows=ings,
+                is_new=True, error=str(e), options=opts, catalog=catalog,
+                catalog_json=json.dumps(catalog, ensure_ascii=False), change_note='',
+            ), 400
+
+        return redirect(url_for('recipe_detail', recipe_id=result['recipe_id']))
     else:
         empty_recipe = {
             'id': None, 'title': '', 'description': '', 'instructions': '',
@@ -1107,9 +1196,12 @@ def new_recipe():
         }
         with engine.connect() as conn:
             opts = _category_options(conn)
+            catalog = _catalog_payload(conn)
         return render_template('edit_recipe.html', recipe=empty_recipe,
-                               ingredients_text='', is_new=True,
-                               options=opts)
+                               ingredients_rows=[], is_new=True,
+                               options=opts, catalog=catalog,
+                               catalog_json=json.dumps(catalog, ensure_ascii=False),
+                               change_note='')
 
 @app.route('/recipe/<int:recipe_id>/delete', methods=['POST'])
 def delete_recipe(recipe_id):
@@ -1172,7 +1264,7 @@ def api_recipe_get(recipe_id):
             {
                 'ingredient_id': r['ingredient_id'],
                 'name': r['name'],
-                'amount': r['amount'],
+                'amount': _fmt_amount(r['amount']),
                 'unit': r['unit'],
                 'note': r['note'],
                 'grocery_category': r['grocery_category'],

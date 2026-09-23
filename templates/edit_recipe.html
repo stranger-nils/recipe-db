@@ -3,47 +3,44 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#1f9ab4" />
+<meta name="theme-color" content="#1f2c38" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Recept" />
 <title>{% if is_new %}Nytt recept{% else %}Redigerar: {{ recipe.title }}{% endif %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Spectral:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
 <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}" />
+<link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}" />
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}" />
 </head>
 <body class="dens-kompakt">
-<div class="ide">
+<div class="ide ide-edit">
   <nav class="rail">
+    <div class="rail-brand" title="Recept">R</div>
     <div class="rail-items">
-      <a class="rail-btn active" href="/" title="Recept">
+      <a class="rail-btn{% if is_new %} active{% endif %}" href="/" title="Recept">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4zM5 4a2 2 0 0 0 0 4h11M9 12h6"/></svg>
         <span class="rail-tip">Recept</span>
-      </a>
-      <a class="rail-btn" href="/ingredients" title="Ingredienser">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 12h16M4 19h16"/><path d="M7 5v14"/></svg>
-        <span class="rail-tip">Ingredienser</span>
-      </a>
-      <a class="rail-btn" href="/plan" title="Planering">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7zM9 7V5a3 3 0 0 1 6 0v2"/></svg>
-        <span class="rail-tip">Planering</span>
       </a>
     </div>
   </nav>
 
   <aside class="explorer">
-    <div class="exp-head"><span class="exp-title">Redigerar</span></div>
-    <div class="exp-scroll" style="padding:14px;">
-      <p style="font-family:var(--serif); font-size:13.5px; color:var(--ink2); margin:0 0 10px;">
+    <div class="exp-head"><span class="exp-title">{% if is_new %}nytt recept{% else %}redigerar{% endif %}</span></div>
+    <div class="exp-scroll ef-meta">
+      <p class="ef-meta-title">
         {% if is_new %}Nytt recept{% else %}{{ recipe.title }}{% endif %}
       </p>
       {% if not is_new %}
-        <a href="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}" class="btn-ghost" style="display:inline-flex;">← Tillbaka</a>
-      {% else %}
-        <a href="/" class="btn-ghost" style="display:inline-flex;">← Tillbaka</a>
+        <div class="ef-meta-row">
+          <span class="ef-meta-k">versioner</span>
+          <span class="ef-meta-v">{{ version_count }} st</span>
+        </div>
       {% endif %}
+      <a href="{% if is_new %}/{% else %}{{ url_for('recipe_detail', recipe_id=recipe['id']) }}{% endif %}" class="btn-ghost">← Tillbaka</a>
     </div>
   </aside>
 
@@ -55,96 +52,131 @@
     </div>
     <div class="editor-body">
       <div class="editform">
-        <h1>{% if is_new %}Nytt recept{% else %}Redigera recept{% endif %}</h1>
+        <header class="ef-head">
+          <div>
+            <h1>{% if is_new %}Nytt recept{% else %}Redigera recept{% endif %}</h1>
+            <p class="ef-sub">Fälten sparas som en ny version — gamla versioner finns kvar i historiken.</p>
+          </div>
+          <span class="ef-badge">{% if is_new %}ny v1{% else %}ny version{% endif %}</span>
+        </header>
 
         {% if error %}
-          <div class="errbox"><strong>Fel:</strong> {{ error }}</div>
+          <div class="errbox" role="alert">
+            <strong>Kan inte spara:</strong> {{ error }}
+          </div>
         {% endif %}
 
         {% set options = options or {'kitchens': [], 'types': [], 'tags': []} %}
-        <form method="post" id="edit-form">
-          <div class="field">
-            <label for="title">Titel</label>
-            <input type="text" id="title" name="title" value="{{ recipe.title }}" required autofocus />
-          </div>
+        <form method="post" id="edit-form" novalidate>
+          <input type="hidden" name="ingredients_json" id="ingredients-json" value="" />
 
-          <div class="field">
-            <label for="description">Beskrivning</label>
-            <textarea id="description" name="description" style="min-height:80px;" placeholder="Kort introduktion eller bakgrund">{{ recipe.description }}</textarea>
-          </div>
-
-          <div class="field">
-            <label for="ingredients">Ingredienser — en per rad: <code>mängd enhet namn</code></label>
-            <textarea id="ingredients" name="ingredients" placeholder="200 g spaghetti&#10;2 st ägg&#10;50 g pecorino">{{ ingredients_text }}</textarea>
-            <small style="font-family:var(--mono); font-size:11px; color:var(--ink3); margin-top:4px; display:block;">Namnet måste matcha katalogen (eller alias). Saknas — lägg till i <a href="{{ url_for('ingredient_library') }}" style="color:var(--accent);">ingrediensbiblioteket</a> först.</small>
-          </div>
-
-          <div class="field">
-            <label for="instructions">Tillvägagångssätt (separera steg med tom rad eller numrera)</label>
-            <textarea id="instructions" name="instructions" style="min-height:260px;">{{ recipe.instructions }}</textarea>
-          </div>
-
-          <div class="row">
+          {# ---- 01 Grund ---- #}
+          <section class="ef-sec">
+            <h2 class="ef-sec-h"><span class="ef-sec-n">01</span> Grund</h2>
             <div class="field">
-              <label for="kitchen">Kök</label>
-              <input type="text" id="kitchen" name="kitchen" value="{{ recipe.kitchen }}"
-                     list="kitchen-options" autocomplete="off"
-                     placeholder="t.ex. Italienskt" />
-              <datalist id="kitchen-options">
-                {% for k in options.kitchens %}<option value="{{ k }}">{% endfor %}
-              </datalist>
+              <label for="title">Titel <em class="req">*</em></label>
+              <input type="text" id="title" name="title" value="{{ recipe.title }}" required autofocus
+                     placeholder="t.ex. Tonnarelli cacio e pepe" />
             </div>
             <div class="field">
-              <label for="type">Typ</label>
-              <input type="text" id="type" name="type" value="{{ recipe.type }}"
-                     list="type-options" autocomplete="off"
-                     placeholder="förrätt, huvudrätt…" />
-              <datalist id="type-options">
-                {% for t in options.types %}<option value="{{ t }}">{% endfor %}
-              </datalist>
+              <label for="description">Beskrivning</label>
+              <textarea id="description" name="description" style="min-height:80px;" placeholder="Kort introduktion eller bakgrund">{{ recipe.description }}</textarea>
             </div>
-          </div>
-
-          <div class="field">
-            <label for="tags">Taggar</label>
-            <input type="text" id="tags" name="tags" value="{{ recipe.tags }}"
-                   autocomplete="off" placeholder="kommaseparerat — t.ex. snabbt, vegetariskt" />
-            {% if options.tags %}
-              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;" data-tag-chips>
-                {% for t in options.tags %}
-                  <span class="chip" data-tag="{{ t }}" style="cursor:pointer;">{{ t }}</span>
-                {% endfor %}
+            <div class="row">
+              <div class="field">
+                <label for="kitchen">Kök</label>
+                <input type="text" id="kitchen" name="kitchen" value="{{ recipe.kitchen }}"
+                       list="kitchen-options" autocomplete="off"
+                       placeholder="t.ex. Italienskt" />
+                <datalist id="kitchen-options">
+                  {% for k in options.kitchens %}<option value="{{ k }}">{% endfor %}
+                </datalist>
               </div>
-            {% endif %}
-          </div>
+              <div class="field">
+                <label for="type">Typ</label>
+                <input type="text" id="type" name="type" value="{{ recipe.type }}"
+                       list="type-options" autocomplete="off"
+                       placeholder="förrätt, huvudrätt…" />
+                <datalist id="type-options">
+                  {% for t in options.types %}<option value="{{ t }}">{% endfor %}
+                </datalist>
+              </div>
+            </div>
+            <div class="field">
+              <label for="tags">Taggar</label>
+              <input type="text" id="tags" name="tags" value="{{ recipe.tags }}"
+                     autocomplete="off" placeholder="kommaseparerat — t.ex. snabbt, vegetariskt" />
+              {% if options.tags %}
+                <div class="ef-chips" data-tag-chips>
+                  {% for t in options.tags %}<span class="chip chip-btn" data-tag="{{ t }}">{{ t }}</span>{% endfor %}
+                </div>
+              {% endif %}
+            </div>
+          </section>
 
-          <div class="field">
-            <label for="notes">Anteckningar</label>
-            <textarea id="notes" name="notes" style="min-height:120px;" placeholder="Variationer, tips…">{{ recipe.notes }}</textarea>
-          </div>
+          {# ---- 02 Ingredienser ---- #}
+          <section class="ef-sec">
+            <h2 class="ef-sec-h"><span class="ef-sec-n">02</span> Ingredienser</h2>
+            <p class="ef-hint">Namn matchas mot katalogen (eller alias). Okända namn måste läggas till i
+              <a href="{{ url_for('ingredient_library') }}">ingrediensbiblioteket</a> först.</p>
 
-          <div class="actions">
-            <button type="submit" class="btn-primary">Spara</button>
-            {% if is_new %}
-              <a href="/" class="btn-ghost">Avbryt</a>
-            {% else %}
-              <a href="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}" class="btn-ghost">Avbryt</a>
-            {% endif %}
+            <div class="ing-editor" id="ing-editor">
+              <div class="ing-ed-head" aria-hidden="true">
+                <span>Mängd</span><span>Enhet</span><span>Ingrediens</span><span>Anteckning</span><span></span>
+              </div>
+              <div class="ing-ed-rows" id="ing-rows"></div>
+              <div class="ing-ed-foot">
+                <button type="button" class="btn-ghost" id="ing-add">+ lägg till rad</button>
+                <span class="ing-status" id="ing-status"></span>
+              </div>
+            </div>
+
+            <datalist id="cat-ings"></datalist>
+            <datalist id="cat-units"></datalist>
+          </section>
+
+          {# ---- 03 Tillagning ---- #}
+          <section class="ef-sec">
+            <h2 class="ef-sec-h"><span class="ef-sec-n">03</span> Tillagning</h2>
+            <div class="field">
+              <label for="instructions">Tillvägagångssätt <span class="lbl-note">— tom rad = nytt steg</span></label>
+              <textarea id="instructions" name="instructions" style="min-height:260px;" placeholder="Steg för steg…">{{ recipe.instructions }}</textarea>
+            </div>
+            <div class="field">
+              <label for="notes">Anteckningar</label>
+              <textarea id="notes" name="notes" style="min-height:120px;" placeholder="Variationer, tips…">{{ recipe.notes }}</textarea>
+            </div>
+          </section>
+
+          {# ---- 04 Versionsnotis ---- #}
+          {% if not is_new %}
+          <section class="ef-sec">
+            <h2 class="ef-sec-h"><span class="ef-sec-n">04</span> Versionsnotis</h2>
+            <div class="field">
+              <label for="change_note">Vad ändrades? <span class="lbl-note">— syns i versionshistorik och diff</span></label>
+              <input type="text" id="change_note" name="change_note" value="{{ change_note }}"
+                     autocomplete="off" placeholder="t.ex. mindre salt, längre tid i ugnen" />
+            </div>
+          </section>
+          {% endif %}
+
+          <div class="form-actions">
+            <div class="fa-left">
+              <kbd>⌘S</kbd> <span class="fa-hint">spara</span>
+            </div>
+            <div class="fa-btns">
+              {% if not is_new %}
+                <button type="submit" class="link-del"
+                        formaction="{{ url_for('delete_recipe', recipe_id=recipe['id']) }}"
+                        formmethod="post"
+                        onclick="return confirm('Radera receptet permanent?');">Radera recept</button>
+              {% endif %}
+              <a href="{% if is_new %}/{% else %}{{ url_for('recipe_detail', recipe_id=recipe['id']) }}{% endif %}" class="btn-ghost">Avbryt</a>
+              <button type="submit" class="btn-primary">Spara version</button>
+            </div>
           </div>
         </form>
-
-        {% if not is_new %}
-          <form method="post" action="{{ url_for('delete_recipe', recipe_id=recipe['id']) }}"
-                style="margin-top:30px;" onsubmit="return confirm('Radera receptet permanent?');">
-            <button type="submit" class="btn-ghost" style="color:#9b3a3a; border-color:color-mix(in oklab, #9b3a3a 35%, var(--line2));">Radera recept</button>
-          </form>
-        {% endif %}
       </div>
-    </div>
-    <div class="statusbar">
-      <span class="sb-mode">{% if is_new %}nytt{% else %}redigerar{% endif %}</span>
-      <span class="sb-spacer"></span>
-      <span class="sb-item">⌘S för att spara</span>
     </div>
   </main>
 </div>
@@ -164,38 +196,20 @@
   </a>
 </nav>
 
+<script id="edit-data" type="application/json">{{ {'is_new': is_new, 'ingredients': ingredients_rows, 'catalog': catalog}|tojson }}</script>
+<script src="{{ url_for('static', filename='edit-form.js') }}"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+</script>
 <script>
 (function () {
-  const tagInput = document.getElementById('tags');
-  const chipBox = document.querySelector('[data-tag-chips]');
-  if (tagInput && chipBox) {
-    const current = () => tagInput.value.split(',').map(s => s.trim()).filter(Boolean);
-    const sync = () => {
-      const set = new Set(current().map(s => s.toLowerCase()));
-      chipBox.querySelectorAll('[data-tag]').forEach(c => {
-        const on = set.has(c.dataset.tag.toLowerCase());
-        c.style.background = on ? 'var(--accent)' : 'var(--bg)';
-        c.style.color = on ? 'var(--paper)' : 'var(--ink2)';
-        c.style.borderColor = on ? 'var(--accent)' : 'var(--line2)';
-      });
-    };
-    chipBox.addEventListener('click', e => {
-      const chip = e.target.closest('[data-tag]');
-      if (!chip) return;
-      const arr = current();
-      const v = chip.dataset.tag;
-      const idx = arr.map(s => s.toLowerCase()).indexOf(v.toLowerCase());
-      if (idx === -1) arr.push(v); else arr.splice(idx, 1);
-      tagInput.value = arr.join(', ');
-      sync();
-    });
-    tagInput.addEventListener('input', sync);
-    sync();
-  }
-  document.addEventListener('keydown', e => {
+  'use strict';
+  document.addEventListener('keydown', function (e) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
-      document.getElementById('edit-form').submit();
+      document.getElementById('edit-form').requestSubmit();
     }
   });
 })();

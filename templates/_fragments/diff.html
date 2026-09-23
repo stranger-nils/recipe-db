@@ -47,7 +47,7 @@
     <div class="df-section">
       <div class="df-sec-h">Ingredienser</div>
       {% for r in ing_rows %}
-        <div class="df-pair">
+        <div class="df-pair type-{{ r.type }}">
           {% set cls_a = 'df-line' %}
           {% if r.type == 'add' %}{% set cls_a = 'df-line df-empty' %}
           {% elif r.type == 'del' %}{% set cls_a = 'df-line df-del' %}
@@ -59,10 +59,12 @@
           <div class="{{ cls_a }}">
             <span class="df-mark">{% if r.type == 'del' %}−{% elif r.type == 'chg' %}~{% endif %}</span>
             <span class="df-text">{% if r.a %}{{ r.a.amount or '' }} {{ r.a.unit or '' }} {{ r.a.name }}{% if r.a.note %}, {{ r.a.note }}{% endif %}{% endif %}</span>
+            <span class="df-side-tag">v{{ v_from }}</span>
           </div>
           <div class="{{ cls_b }}">
             <span class="df-mark">{% if r.type == 'add' %}+{% elif r.type == 'chg' %}~{% endif %}</span>
             <span class="df-text">{% if r.b %}{{ r.b.amount or '' }} {{ r.b.unit or '' }} {{ r.b.name }}{% if r.b.note %}, {{ r.b.note }}{% endif %}{% endif %}</span>
+            <span class="df-side-tag">v{{ v_to }}</span>
           </div>
         </div>
       {% endfor %}
@@ -71,7 +73,7 @@
     <div class="df-section">
       <div class="df-sec-h">Tillvägagångssätt</div>
       {% for r in step_rows %}
-        <div class="df-pair">
+        <div class="df-pair type-{{ r.type }}">
           {% set cls_a = 'df-line' %}
           {% if r.type == 'add' %}{% set cls_a = 'df-line df-empty' %}
           {% elif r.type == 'del' %}{% set cls_a = 'df-line df-del' %}{% endif %}
@@ -81,10 +83,12 @@
           <div class="{{ cls_a }}">
             <span class="df-mark">{% if r.type == 'del' %}−{% endif %}</span>
             <span class="df-text">{{ r.a or '' }}</span>
+            <span class="df-side-tag">v{{ v_from }}</span>
           </div>
           <div class="{{ cls_b }}">
             <span class="df-mark">{% if r.type == 'add' %}+{% endif %}</span>
             <span class="df-text">{{ r.b or '' }}</span>
+            <span class="df-side-tag">v{{ v_to }}</span>
           </div>
         </div>
       {% endfor %}
