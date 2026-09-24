@@ -18,7 +18,10 @@
   </div>
 
   <header class="doc-head">
-    <h1>{{ recipe.title }}</h1>
+    <div class="doc-head-line">
+      <h1>{{ recipe.title }}</h1>
+      <span class="rec-no">#{{ '%03d' % recipe.id }}</span>
+    </div>
     {% if recipe.description %}<p class="doc-desc">{{ recipe.description }}</p>{% endif %}
     <div class="doc-meta">
       {% if recipe.kitchen %}<span class="chip">{{ recipe.kitchen }}</span>{% endif %}
@@ -92,6 +95,7 @@
         {% set anno = annotations.get(akey, '') %}
         <li class="ing-item" data-anno-key="{{ akey }}">
           <div class="ing-row">
+            <span class="ing-idx">{{ '%02d' % loop.index }}</span>
             <span class="ing-q" data-base-qty="{{ ing.amount or '' }}">{{ ing.amount or '' }}</span>
             <span class="ing-u">{{ ing.unit or '' }}</span>
             <span class="ing-n">{{ ing.name }}{% if ing.note %}<span class="ing-note">, {{ ing.note }}</span>{% endif %}{% if ing.kitchen_staple %}<span class="pantry-dot" title="Skafferivara">skafferi</span>{% endif %}</span>

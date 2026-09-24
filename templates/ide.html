@@ -3,23 +3,26 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#1f9ab4" />
+<meta name="theme-color" content="#ffffff" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Recept" />
 <title>Recept</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
 <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}" />
+<link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}" />
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}" />
 </head>
 <body class="dens-kompakt">
-<button class="explorer-toggle" id="explorer-toggle" title="Visa/dölj panel">≡</button>
 <div class="ide">
 
   {# ---- Aktivitetsrad ---- #}
   <nav class="rail">
+    <div class="rail-brand" title="Recept">R</div>
     <div class="rail-items">
       <button class="rail-btn{% if mode == 'recept' %} active{% endif %}" data-mode-link="/" title="Recept">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4zM5 4a2 2 0 0 0 0 4h11M9 12h6"/></svg>
@@ -50,6 +53,8 @@
   {# ---- Editor ---- #}
   <main class="editor">
     <div class="tabstrip" id="tabstrip">
+      {# Hamburgare (≡) renderas av JS i recept-vyn; här i mallen för övriga lägen #}
+      <button class="ts-toggle" id="explorer-toggle" title="Visa/dölj panel" aria-label="Visa/dölj panel">≡</button>
       {% if mode == 'recept' %}
         {# fylls av JS från sessionStorage / inledande recipe #}
       {% elif mode == 'ingredienser' %}
@@ -76,13 +81,6 @@
           {% include '_fragments/plan.html' %}
         </div>
       {% endif %}
-    </div>
-
-    <div class="statusbar">
-      <span class="sb-mode">{{ mode }}</span>
-      <span class="sb-item" id="sb-info"></span>
-      <span class="sb-spacer"></span>
-      <span class="sb-item">⌘K</span>
     </div>
   </main>
 </div>
@@ -117,5 +115,10 @@
 
 <script id="recipe-data" type="application/json">{{ data_json|safe }}</script>
 <script src="{{ url_for('static', filename='app.js') }}"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
+</script>
 </body>
 </html>
