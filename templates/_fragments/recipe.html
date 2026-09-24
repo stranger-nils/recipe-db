@@ -88,7 +88,7 @@
   {% endif %}
 
   <section class="block">
-    <h2 class="block-h"><span class="bh-n">01</span> Ingredienser</h2>
+    <h2 class="block-h">Ingredienser</h2>
     <ul class="ing-list">
       {% for ing in ingredients %}
         {% set akey = 'ingredient:' + ing.name %}
@@ -108,7 +108,7 @@
   </section>
 
   <section class="block">
-    <h2 class="block-h"><span class="bh-n">02</span> Tillvägagångssätt</h2>
+    <h2 class="block-h">Tillvägagångssätt</h2>
     <ol class="step-list">
       {% for step in steps %}
         {% set akey = 'step:' + loop.index0|string %}
@@ -129,7 +129,7 @@
 
   {% if recipe.notes %}
     <section class="block">
-      <h2 class="block-h"><span class="bh-n">03</span> Anteckningar</h2>
+      <h2 class="block-h">Anteckningar</h2>
       <p class="doc-desc" style="white-space:pre-wrap;">{{ recipe.notes }}</p>
     </section>
   {% endif %}

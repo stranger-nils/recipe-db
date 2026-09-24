@@ -19,17 +19,6 @@
 <body class="dens-kompakt">
 <div class="ide ide-edit">
 
-  {# ---- Statusrad: diskret datareadout (ersätter det svarta ticker-bandet) ---- #}
-  <div class="statusbar" role="status" aria-label="Status">
-    <span class="sb-mode">{% if is_new %}nytt recept{% else %}redigera{% endif %}</span>
-    <span class="sb-sep"></span>
-    <span class="sb-item">recept <b>{{ ticker_recipes }}</b></span>
-    <span class="sb-sep"></span>
-    <span class="sb-item">ingredienser <b>{{ ticker_ingredients }}</b></span>
-    <span class="sb-spacer"></span>
-    <span class="sb-item" id="sb-info">{% if is_new %}version 1{% else %}ny version{% endif %}</span>
-  </div>
-
   <nav class="rail">
     <div class="rail-brand" title="Recept">R</div>
     <div class="rail-items">

@@ -8,13 +8,6 @@
   const CATALOG = DATA.catalog || [];           // [{name,grocery_category}]
   const TAB_STORAGE_KEY = "mise.tabs.v1";
 
-  /* ---------- ticker: raknevarden (Bloomberg-tape) ----------
-     Anvander getElementById: koden kors innan $-helpern ar deklarerad. */
-  const tkRecipes = document.getElementById("tk-recipes");
-  if (tkRecipes) tkRecipes.textContent = RECIPES.length;
-  const tkIngredients = document.getElementById("tk-ingredients");
-  if (tkIngredients) tkIngredients.textContent = CATALOG.length;
-
   /* ---------- helpers ---------- */
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -326,7 +319,6 @@
       if (tsSel && tsSel.value !== key) tsSel.value = key;
       showWelcome(false);
       highlightActiveTreeRow();
-      updateStatusBar();
     }
 
     function closeTab(key) {
@@ -340,7 +332,7 @@
       if (activeTabKey === key) {
         const next = TABS[Math.max(0, idx - 1)];
         if (next) activateTab(next.key);
-        else { activeTabKey = null; showWelcome(true); updateStatusBar(); }
+        else { activeTabKey = null; showWelcome(true); }
       }
       highlightActiveTreeRow();
     }
@@ -386,16 +378,6 @@
       } catch (e) {
         pane.innerHTML = '<div class="welcome"><p>Kunde inte ladda diff.</p></div>';
       }
-      updateStatusBar();
-    }
-
-    function updateStatusBar() {
-      const sb = $("#sb-info");
-      const t = currentActiveTab();
-      if (!t) { sb.textContent = ""; return; }
-      const r = RECIPES.find((x) => x.id === t.recipeId);
-      if (!r) { sb.textContent = ""; return; }
-      sb.textContent = (t.kind === "diff" ? "diff · " : "") + (r.kitchen || "") + (r.type ? " · " + r.type : "");
     }
 
     // Återställ sparade flikar — alltid, även när ?open= finns: panes
@@ -699,8 +681,6 @@
     $$("[data-open-recipe]", table).forEach((btn) => {
       btn.addEventListener("click", () => { window.location.href = "/?open=" + btn.dataset.openRecipe; });
     });
-
-    $("#sb-info").textContent = "" /* ticker visar redan antalet */;
   }
 
   /* ---------- Planering ---------- */
@@ -773,7 +753,6 @@
       if (!selected.size) {
         empty.style.display = "";
         active.hidden = true;
-        $("#sb-info").textContent = "0 recept valda";
         return;
       }
       empty.style.display = "none";
@@ -875,8 +854,6 @@
           setTimeout(() => { copied = false; renderView(); }, 1800);
         });
       }
-
-      $("#sb-info").textContent = `${sel.length} recept valda`;
     }
     function groupsItemPantry(groups, key) {
       for (const g of groups) for (const it of g.items) if (it.key === key) return !!it.pantry;

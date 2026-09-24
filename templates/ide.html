@@ -52,20 +52,6 @@
 
   {# ---- Editor ---- #}
   <main class="editor">
-    {# ---- Statusrad: diskret datareadout (ersätter det svarta ticker-bandet) ---- #}
-    <div class="statusbar" role="status" aria-label="Status">
-      <span class="sb-mode">{{ mode }}</span>
-      <span class="sb-sep"></span>
-      <span class="sb-item">recept <b id="tk-recipes">–</b></span>
-      <span class="sb-sep"></span>
-      <span class="sb-item">ingredienser <b id="tk-ingredients">–</b></span>
-      {% if mode == 'recept' %}
-        <span class="sb-sep sb-sep-live"></span>
-        <span class="sb-item sb-live"><span class="tk-dot">●</span> live</span>
-      {% endif %}
-      <span class="sb-spacer"></span>
-      <span class="sb-item" id="sb-info">{% if mode == 'recept' %}öppna recept{% elif mode == 'planering' %}0 recept valda{% endif %}</span>
-    </div>
     <div class="tabstrip" id="tabstrip">
       {# Hamburgare (≡) renderas av JS i recept-vyn; här i mallen för övriga lägen #}
       <button class="ts-toggle" id="explorer-toggle" title="Visa/dölj panel" aria-label="Visa/dölj panel">≡</button>
