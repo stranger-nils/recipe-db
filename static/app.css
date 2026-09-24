@@ -19,7 +19,7 @@
   --line:  #d9d9d9;              /* hairline */
   --line2: #a8a8a8;              /* kraftigare hairline */
   /* signalröd-orange — ENDA accenten, extremt sparsam */
-  --accent: #e0492c;
+  --accent: #1f9ab4;
   /* diff: semantik bärs av tecken (+/−/~) och bläck, inte pastell */
   --add-bg: transparent; --add-fg: #0c0c0c;
   --del-bg: transparent; --del-fg: #7a7a7a;
