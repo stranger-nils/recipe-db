@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#0a0a0a" />
+<meta name="theme-color" content="#ffffff" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -18,25 +18,7 @@
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}" />
 </head>
 <body class="dens-kompakt">
-<button class="explorer-toggle" id="explorer-toggle" title="Visa/dölj panel">≡</button>
 <div class="ide">
-
-  {# ---- Ticker-band längst upp (Bloomberg-tape): maskinläsbar datareadout ---- #}
-  <div class="ticker" role="status" aria-label="Status">
-    <span class="tk-item tk-mode">{{ mode }}</span>
-    <span class="tk-sep"></span>
-    <span class="tk-item">recept <b id="tk-recipes">–</b></span>
-    <span class="tk-sep"></span>
-    <span class="tk-item">ingredienser <b id="tk-ingredients">–</b></span>
-    <span class="tk-sep"></span>
-    <span class="tk-item" id="sb-info">{% if mode == 'recept' %}öppna recept{% elif mode == 'planering' %}0 recept valda{% endif %}</span>
-    {% if mode == 'recept' %}
-      <span class="tk-sep"></span>
-      <span class="tk-item tk-live"><span class="tk-dot">●</span> live</span>
-    {% endif %}
-    <span class="tk-spacer"></span>
-    <span class="tk-item tk-cmd">⌘K</span>
-  </div>
 
   {# ---- Aktivitetsrad ---- #}
   <nav class="rail">
@@ -70,7 +52,23 @@
 
   {# ---- Editor ---- #}
   <main class="editor">
+    {# ---- Statusrad: diskret datareadout (ersätter det svarta ticker-bandet) ---- #}
+    <div class="statusbar" role="status" aria-label="Status">
+      <span class="sb-mode">{{ mode }}</span>
+      <span class="sb-sep"></span>
+      <span class="sb-item">recept <b id="tk-recipes">–</b></span>
+      <span class="sb-sep"></span>
+      <span class="sb-item">ingredienser <b id="tk-ingredients">–</b></span>
+      {% if mode == 'recept' %}
+        <span class="sb-sep sb-sep-live"></span>
+        <span class="sb-item sb-live"><span class="tk-dot">●</span> live</span>
+      {% endif %}
+      <span class="sb-spacer"></span>
+      <span class="sb-item" id="sb-info">{% if mode == 'recept' %}öppna recept{% elif mode == 'planering' %}0 recept valda{% endif %}</span>
+    </div>
     <div class="tabstrip" id="tabstrip">
+      {# Hamburgare (≡) renderas av JS i recept-vyn; här i mallen för övriga lägen #}
+      <button class="ts-toggle" id="explorer-toggle" title="Visa/dölj panel" aria-label="Visa/dölj panel">≡</button>
       {% if mode == 'recept' %}
         {# fylls av JS från sessionStorage / inledande recipe #}
       {% elif mode == 'ingredienser' %}

@@ -25,7 +25,7 @@ engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
 
 @app.context_processor
 def inject_ticker_counts():
-    """Ticker-bandet (Bloomberg-tape) visar maskinläsbara räknevärden på
+    """Statusraden visar maskinläsbara räknevärden på
     alla sidor. Två billiga COUNT-queries mot sqlite; fragment-render
     drabbas knappt. Får aldrig fälla en sida."""
     try:

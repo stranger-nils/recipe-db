@@ -4,7 +4,7 @@
    - Statiska assets: cache-first, fyll på i bakgrunden.
    - /api/* caches aldrig (skrivskyddade data ska alltid vara färska).
 */
-const CACHE = "recept-cache-v2";
+const CACHE = "recept-cache-v3";
 
 const STATIC_ASSETS = [
   "/static/app.css",

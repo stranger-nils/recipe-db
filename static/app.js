@@ -70,16 +70,19 @@
     btn.addEventListener("click", () => { window.location.href = btn.dataset.modeLink; });
   });
 
-  /* ---------- mobil: toggla explorern ---------- */
-  const explorerToggle = $("#explorer-toggle");
+  /* ---------- mobil: toggla explorern (knappen ligger i tabraden, .ts-toggle) ---------- */
   const ideEl = document.querySelector(".ide");
-  explorerToggle && ideEl && explorerToggle.addEventListener("click", () => {
-    ideEl.classList.toggle("show-explorer");
-  });
+  function wireToggle() {
+    const t = $("#explorer-toggle");
+    if (!t || t.dataset.wired) return;
+    t.dataset.wired = "1";
+    t.addEventListener("click", () => ideEl && ideEl.classList.toggle("show-explorer"));
+  }
+  wireToggle();
   // Stäng explorern automatiskt när användaren väljer något i panelen på mobil
   // (annars täcker den den nyöppnade fliken/innehållet).
   function closeExplorerOnMobile() {
-    if (window.matchMedia("(max-width:720px)").matches) {
+    if (window.innerWidth <= 720) {
       ideEl && ideEl.classList.remove("show-explorer");
     }
   }
@@ -237,11 +240,36 @@
     function currentActiveTab() { return TABS.find((t) => t.key === activeTabKey); }
 
     function renderTabstrip() {
-      tabstrip.innerHTML = TABS.map((t) => `
+      // Telefon (≤480px): tabbar som dropdown i stället för en rad med
+      // trunkerade etiketter. Hamburgaren (≡) ligger som första cell i
+      // tabraden — kan aldrig överlappa tabbar.
+      if (window.innerWidth <= 480) {
+        const middle = TABS.length
+          ? `<div class="ts-selwrap"><select class="ts-select" aria-label="Öppen flik" data-ts-switch>
+              ${TABS.map((t) => `<option value="${escapeHtml(t.key)}"${t.key === activeTabKey ? " selected" : ""}>${escapeHtml(t.title)}</option>`).join("")}
+            </select><span class="ts-tri">▾</span></div>`
+          : `<div class="ts-none">recept · öppna recept</div>`;
+        tabstrip.innerHTML =
+          `<button class="ts-toggle" id="explorer-toggle" title="Visa/dölj panel" aria-label="Visa/dölj panel">≡</button>`
+          + middle
+          + (TABS.length
+            ? `<button class="ts-close" data-ts-close title="Stäng aktiv flik">${svgClose}</button>`
+            : "");
+        wireToggle();
+        const sw = $("[data-ts-switch]", tabstrip);
+        sw && sw.addEventListener("change", () => activateTab(sw.value));
+        const tc = $("[data-ts-close]", tabstrip);
+        tc && tc.addEventListener("click", () => { if (activeTabKey) closeTab(activeTabKey); });
+        return;
+      }
+      tabstrip.innerHTML =
+        `<button class="ts-toggle" id="explorer-toggle" title="Visa/dölj panel" aria-label="Visa/dölj panel">≡</button>`
+        + TABS.map((t) => `
         <div class="tab${t.key === activeTabKey ? " active" : ""}" data-tab-key="${escapeHtml(t.key)}">
           <span class="tab-label">${escapeHtml(t.title)}</span>
           <button class="tab-close" data-tab-close="${escapeHtml(t.key)}" title="Stäng">${svgClose}</button>
         </div>`).join("");
+      wireToggle();
       $$(".tab", tabstrip).forEach((el) => {
         el.addEventListener("click", (e) => {
           if (e.target.closest(".tab-close")) return;
@@ -255,6 +283,13 @@
         });
       });
     }
+
+    // Vid rotering (portrait/landscape) görs tabraden om till rätt variant.
+    let lastMobile = window.innerWidth <= 480;
+    window.addEventListener("resize", () => {
+      const m = window.innerWidth <= 480;
+      if (m !== lastMobile) { lastMobile = m; renderTabstrip(); }
+    });
 
     function showWelcome(visible) {
       const w = $('.tab-pane[data-pane="welcome"]', editorBody);
@@ -285,6 +320,10 @@
       const pane = $(`.tab-pane[data-pane="${CSS.escape(key)}"]`, editorBody);
       if (pane) pane.classList.add("active"); else showWelcome(true);
       $$(".tab", tabstrip).forEach((el) => el.classList.toggle("active", el.dataset.tabKey === key));
+      // Mobil: håll dropdownen i synk med aktiv flik (renderas innan
+      // activeTabKey sätts vid ny flik).
+      const tsSel = $("[data-ts-switch]", tabstrip);
+      if (tsSel && tsSel.value !== key) tsSel.value = key;
       showWelcome(false);
       highlightActiveTreeRow();
       updateStatusBar();
@@ -359,15 +398,13 @@
       sb.textContent = (t.kind === "diff" ? "diff · " : "") + (r.kitchen || "") + (r.type ? " · " + r.type : "");
     }
 
-    // open from query (?open=ID, valfri &diff=1) eller återställ flikar
+    // Återställ sparade flikar — alltid, även när ?open= finns: panes
+    // måste hämtas på nytt, annars blir återställda flikar tomma
+    // (zombie-flikar utan pane-innehåll).
     const params = new URLSearchParams(window.location.search);
     const openId = params.get("open");
     const openDiff = params.get("diff") === "1";
-    if (openId) {
-      history.replaceState(null, "", "/");
-      if (openDiff) createDiffTab(+openId, null);
-      else openRecipe(+openId);
-    } else if (TABS.length) {
+    if (TABS.length) {
       renderTabstrip();
       // re-fetch all tab panes
       TABS.forEach(async (t) => {
@@ -382,6 +419,16 @@
           else wireRecipePane(pane, t.recipeId);
         } catch (e) { /* ignore */ }
       });
+    }
+    if (openId) {
+      history.replaceState(null, "", "/");
+      if (openDiff) createDiffTab(+openId, null);
+      else {
+        const existing = TABS.find((t) => t.key === "r:" + openId);
+        if (existing) activateTab(existing.key);
+        else openRecipe(+openId);
+      }
+    } else if (TABS.length) {
       activateTab(TABS[TABS.length - 1].key);
     } else {
       renderTabstrip();
