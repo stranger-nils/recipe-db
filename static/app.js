@@ -8,6 +8,13 @@
   const CATALOG = DATA.catalog || [];           // [{name,grocery_category}]
   const TAB_STORAGE_KEY = "mise.tabs.v1";
 
+  /* ---------- ticker: raknevarden (Bloomberg-tape) ----------
+     Anvander getElementById: koden kors innan $-helpern ar deklarerad. */
+  const tkRecipes = document.getElementById("tk-recipes");
+  if (tkRecipes) tkRecipes.textContent = RECIPES.length;
+  const tkIngredients = document.getElementById("tk-ingredients");
+  if (tkIngredients) tkIngredients.textContent = CATALOG.length;
+
   /* ---------- helpers ---------- */
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -646,7 +653,7 @@
       btn.addEventListener("click", () => { window.location.href = "/?open=" + btn.dataset.openRecipe; });
     });
 
-    $("#sb-info").textContent = CATALOG.length + " ingredienser";
+    $("#sb-info").textContent = "" /* ticker visar redan antalet */;
   }
 
   /* ---------- Planering ---------- */

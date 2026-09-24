@@ -8,8 +8,8 @@
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#1f2c38",
-  "theme_color": "#1f2c38",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
   "lang": "sv",
   "categories": ["food", "productivity"],
   "icons": [

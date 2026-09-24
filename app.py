@@ -23,6 +23,20 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///recipe.db")
 engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
 
 
+@app.context_processor
+def inject_ticker_counts():
+    """Ticker-bandet (Bloomberg-tape) visar maskinläsbara räknevärden på
+    alla sidor. Två billiga COUNT-queries mot sqlite; fragment-render
+    drabbas knappt. Får aldrig fälla en sida."""
+    try:
+        with engine.connect() as conn:
+            rc = conn.execute(text("SELECT COUNT(*) FROM recipe")).scalar() or 0
+            ic = conn.execute(text("SELECT COUNT(*) FROM ingredient")).scalar() or 0
+    except Exception:
+        rc = ic = 0
+    return {'ticker_recipes': rc, 'ticker_ingredients': ic}
+
+
 def _backup_before_edit(note: str | None = None) -> None:
     """Take a pre-edit SQLite snapshot if BACKUP_DIR is configured.
     No-op on local dev (BACKUP_DIR unset). Failures are logged but never

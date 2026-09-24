@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#1f2c38" />
+<meta name="theme-color" content="#0a0a0a" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -11,7 +11,7 @@
 <title>Recept</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
 <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}" />
 <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}" />
@@ -20,6 +20,23 @@
 <body class="dens-kompakt">
 <button class="explorer-toggle" id="explorer-toggle" title="Visa/dölj panel">≡</button>
 <div class="ide">
+
+  {# ---- Ticker-band längst upp (Bloomberg-tape): maskinläsbar datareadout ---- #}
+  <div class="ticker" role="status" aria-label="Status">
+    <span class="tk-item tk-mode">{{ mode }}</span>
+    <span class="tk-sep"></span>
+    <span class="tk-item">recept <b id="tk-recipes">–</b></span>
+    <span class="tk-sep"></span>
+    <span class="tk-item">ingredienser <b id="tk-ingredients">–</b></span>
+    <span class="tk-sep"></span>
+    <span class="tk-item" id="sb-info">{% if mode == 'recept' %}öppna recept{% elif mode == 'planering' %}0 recept valda{% endif %}</span>
+    {% if mode == 'recept' %}
+      <span class="tk-sep"></span>
+      <span class="tk-item tk-live"><span class="tk-dot">●</span> live</span>
+    {% endif %}
+    <span class="tk-spacer"></span>
+    <span class="tk-item tk-cmd">⌘K</span>
+  </div>
 
   {# ---- Aktivitetsrad ---- #}
   <nav class="rail">
@@ -80,13 +97,6 @@
           {% include '_fragments/plan.html' %}
         </div>
       {% endif %}
-    </div>
-
-    <div class="statusbar">
-      <span class="sb-mode">{{ mode }}</span>
-      <span class="sb-item" id="sb-info"></span>
-      <span class="sb-spacer"></span>
-      <span class="sb-item">⌘K</span>
     </div>
   </main>
 </div>

@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#1f2c38" />
+<meta name="theme-color" content="#0a0a0a" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Recept" />
 <title>{% if is_new %}Nytt recept{% else %}Redigerar: {{ recipe.title }}{% endif %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}" />
 <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}" />
 <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icons/icon-192.png') }}" />
@@ -18,6 +18,19 @@
 </head>
 <body class="dens-kompakt">
 <div class="ide ide-edit">
+
+  {# ---- Ticker-band längst upp (Bloomberg-tape) ---- #}
+  <div class="ticker" role="status" aria-label="Status">
+    <span class="tk-item tk-mode">{% if is_new %}nytt recept{% else %}redigera{% endif %}</span>
+    <span class="tk-sep"></span>
+    <span class="tk-item">recept <b>{{ ticker_recipes }}</b></span>
+    <span class="tk-sep"></span>
+    <span class="tk-item">ingredienser <b>{{ ticker_ingredients }}</b></span>
+    <span class="tk-sep"></span>
+    <span class="tk-item" id="sb-info">{% if is_new %}version 1{% else %}ny version{% endif %}</span>
+    <span class="tk-spacer"></span>
+  </div>
+
   <nav class="rail">
     <div class="rail-brand" title="Recept">R</div>
     <div class="rail-items">
