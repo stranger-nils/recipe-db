@@ -883,6 +883,43 @@ def api_cook_log_list():
     return jsonify({'results': [dict(r) for r in rows]})
 
 
+# Units the shopping-list aggregation can convert between. Each maps to
+# (family, factor-to-base); amounts are only converted within a family.
+# Base units: ml for volume, g for weight, 1 for countables.
+_UNIT_ALIASES = {
+    'klyftor': 'klyfta', 'kvistar': 'kvist', 'skivor': 'skiva',
+    'liter': 'l', 'stjälkar': 'st', 'stycken': 'st',
+}
+_UNIT_FACTORS = {
+    'krm': ('vol', 1), 'tsk': ('vol', 5), 'msk': ('vol', 15),
+    'ml': ('vol', 1), 'cl': ('vol', 10), 'dl': ('vol', 100), 'l': ('vol', 1000),
+    'g': ('vikt', 1), 'kg': ('vikt', 1000),
+}
+
+
+def _canonical_unit(unit):
+    u = (unit or '').strip().lower()
+    return _UNIT_ALIASES.get(u, u)
+
+
+def _to_unit(amount, from_unit, to_unit):
+    """Convert a numeric amount from one unit to another. Returns the converted
+    amount, or None if the units aren't in the same family."""
+    if from_unit == to_unit:
+        return amount
+    a, b = _UNIT_FACTORS.get(from_unit), _UNIT_FACTORS.get(to_unit)
+    if not a or not b or a[0] != b[0]:
+        return None
+    return amount * a[1] / b[1]
+
+
+def _parse_amount(amount):
+    try:
+        return float(str(amount).replace(',', '.'))
+    except (TypeError, ValueError):
+        return None
+
+
 @app.route('/api/plan/aggregate', methods=['GET'])
 def api_plan_aggregate():
     ids = request.args.getlist('ids', type=int)
@@ -892,7 +929,7 @@ def api_plan_aggregate():
         placeholders = ','.join(f':id{i}' for i in range(len(ids)))
         params = {f'id{i}': v for i, v in enumerate(ids)}
         rows = conn.execute(text(f'''
-            SELECT i.name, i.grocery_category, i.kitchen_staple,
+            SELECT i.name, i.grocery_category, i.kitchen_staple, i.default_unit,
                    ri.amount, ri.unit
             FROM recipe_ingredient ri
             JOIN ingredient i ON ri.ingredient_id = i.id
@@ -902,12 +939,25 @@ def api_plan_aggregate():
     by_cat = {}
     for r in rows:
         cat = r['grocery_category'] or 'Övrigt'
-        key = (r['name'] or '').lower() + '|' + (r['unit'] or '').lower()
+        unit = _canonical_unit(r['unit'])
+        amount = r['amount']
+        # Bring the amount into the ingredient's default unit when the two are
+        # convertible (msk → g is not; tsk → krm, kg → g, klyftor → klyfta are),
+        # so the same ingredient across recipes lands on one row.
+        default_unit = _canonical_unit(r['default_unit'])
+        num = _parse_amount(amount)
+        if default_unit and num is not None:
+            converted = _to_unit(num, unit, default_unit)
+            if converted is not None:
+                unit, amount = default_unit, converted
+        elif default_unit and not unit:
+            unit = default_unit  # "efter smak"-rows without a unit
+        key = (r['name'] or '').lower() + '|' + unit
         entry = by_cat.setdefault(cat, {}).setdefault(key, {
-            'key': key, 'name': r['name'], 'unit': r['unit'] or '',
+            'key': key, 'name': r['name'], 'unit': unit,
             'pantry': bool(r['kitchen_staple']), 'amounts': [],
         })
-        entry['amounts'].append(r['amount'])
+        entry['amounts'].append(amount)
 
     groups = []
     for cat in sorted(by_cat.keys(), key=lambda s: s.lower()):
@@ -922,7 +972,7 @@ def api_plan_aggregate():
                     if a:
                         non_numeric.append(str(a))
             if not non_numeric and nums:
-                total = sum(nums)
+                total = round(sum(nums), 2)
                 qty_display = str(int(total)) if abs(total - int(total)) < 1e-9 else f'{total:g}'
             elif non_numeric and not nums:
                 qty_display = ' + '.join(non_numeric)
