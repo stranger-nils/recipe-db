@@ -61,8 +61,6 @@ Om du lägger till en ny skill: skapa under `.claude/skills/<namn>/SKILL.md`, k�
 
 **Migrationer** — körs på Pi:n via deploy-flödet ovan (i `iris-workspace`), inte via SSH härifrån.
 
-**Publicera veckomeny** — `scripts/publish-plan.sh` (separat file server på Pi:n, se `docs/pi-setup.md`).
-
 ## Viktiga paths
 
 - Lokal repo: (där du står nu)

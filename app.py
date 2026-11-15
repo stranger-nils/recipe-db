@@ -857,8 +857,7 @@ def api_cook_log_upsert():
 
 @app.route('/api/cook-log', methods=['GET'])
 def api_cook_log_list():
-    """Vad har lagats, och när. Används av veckomeny-skillen för att undvika
-    att föreslå samma rätter vecka efter vecka.
+    """Vad har lagats, och när (tillagningsdagboken).
 
     Query: ?since=YYYY-MM-DD (valfritt) filtrerar på cooked_at.
     Svar: {results: [{recipe_id, title, version_number, cooked_at, rating}]}
