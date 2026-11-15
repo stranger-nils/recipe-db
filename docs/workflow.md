@@ -106,7 +106,7 @@ versionshistoriken.
 | Pi:n serverar | `curl -s -o /dev/null -w '%{http_code}\n' https://nils-rpi:8443/` → `200` |
 | Skills i Claude Code | `./scripts/sync-skills.sh` vid sessionsstart |
 | Skills i Cowork | Manuell uppladdning under Customize → Skills efter varje ändring |
-| API:t når VPS:en | `RECIPE_API_URL` + `RECIPE_API_TOKEN` i `.claude/.env` |
+| API:t når Pi:n (Tailscale) | `RECIPE_API_URL` + `RECIPE_API_TOKEN` i `.claude/.env` |
 | Upprepningsfiltret | `/api/cook-log` måste vara deployad; annars körs veckan utan det |
 
 **Skill-versionerna glider isär tyst.** Repot är source of truth, men Cowork

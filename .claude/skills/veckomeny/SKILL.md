@@ -3,7 +3,7 @@ name: veckomeny
 description: "Planera veckans matlagning: föreslå ett bestämt antal maträtter utifrån önskemål, publicera dem som en HTML-sida på Raspberry Pi:n (nås över tailnet), och generera en komplett inköpslista när urvalet är klart. Triggas av /veckomeny eller fraser som 'veckomeny', 'veckans middagar', 'planera veckan', 'vad ska jag laga i veckan', 'matsedel', 'fem rätter till veckan'. Skriver ALDRIG till receptdatabasen — för att spara ett recept, använd recipe-skillen."
 ---
 
-<!-- SKILL_VERSION: 2026-08-30 -->
+<!-- SKILL_VERSION: 2026-11-15 -->
 
 ## ⚠️ Versionskontroll — gör detta först
 
@@ -99,7 +99,7 @@ curl -sS -H "Authorization: Bearer $RECIPE_API_TOKEN" "$RECIPE_API_URL/api/cook-
 
 **Upprepningströskeln** är `VECKOMENY_REPEAT_WEEKS` i `.claude/.env`, default **3 veckor**. Recept som lagats inom fönstret föreslås inte — om inte Nils ber om dem, eller uttryckligen vill ha en favorit i repris. Nämn det när du väljer bort något han kanske väntade sig: *"Chow mein hoppade jag över — du lagade den för två veckor sedan. Säg till om du vill ha den ändå."*
 
-Svarar `/api/cook-log` med **404 eller 405** är GET-endpointen inte utrullad på VPS:en än (405 = bara POST finns där, dvs. koden är skriven men inte deployad). Fortsätt utan filtret och nämn det i en mening.
+Svarar `/api/cook-log` med **404 eller 405** är GET-endpointen inte utrullad på Pi:n än (405 = bara POST finns där, dvs. koden är skriven men inte deployad — deploy sker via PR i `iris-workspace`). Fortsätt utan filtret och nämn det i en mening.
 
 För varje recept du väljer ur databasen: hämta det fullständigt med `GET /api/recipe/<id>` — du behöver ingredienserna med `grocery_category` och `kitchen_staple` för inköpslistan.
 
@@ -111,7 +111,7 @@ Här komponerar du, men **skriver inga fullständiga recept**. Du behöver bara 
 
 En vecka är inte fem orelaterade recept. Tänk som någon som faktiskt ska laga dem:
 
-- **Variation i kök och teknik.** Inte tre wokrätter. Sprid `kitchen` och `type`.
+- **Variation i kök och teknik.** Inte tre wokrätter. Sprid `kitchen` och teknik (`tags`) — `type` är en grov enum (förrätt/huvudrätt/sidorätt/komponent/efterrätt) och säger lite om variation.
 - **Belastning över veckan.** Om något tar tre timmar — säg det, och lägg resten av veckan lättare. Markera vad som är vardagsmat och vad som är helgprojekt.
 - **Råvaruöverlapp är en fördel, inte ett fel.** Ett knippe koriander som går åt i två rätter slår två halva knippen som möglar. Nämn överlappen — de gör inköpslistan billigare.
 - **Ett lärande per vecka.** Enligt profilen: minst en rätt ska lära honom något.
@@ -270,10 +270,10 @@ Efter sparandet: uppdatera rättens post i JSON:en till `"source": "db"` med `re
       "id": "d1",
       "source": "db",
       "recipe_id": 20,
-      "url": "https://recipedb.cloud/recipe/20",
+      "url": "http://100.127.88.96:5001/recipe/20",
       "title": "Chow mein med jätteräkor",
       "kitchen": "🥢 Kantonesiskt",
-      "type": "Wok",
+      "type": "huvudrätt",
       "tags": "wok,snabbt",
       "servings": 4,
       "time": "30 min",
@@ -314,7 +314,7 @@ Efter sparandet: uppdatera rättens post i JSON:en till `"source": "db"` med `re
 - **Kortförslag före detaljer, alltid.** Inga fullständiga recept, ingen JSON, ingen rendering och ingen publicering innan Nils godkänt förslagslistan i Steg 4.
 - **"Mix" betyder variation**, inte att källan är blandad. Källan bekräftas i klartext.
 - **Aldrig skrivning till recept-DB:n eller Notion.** Steg 10 är enda vägen till databasen, via `recipe`-skillen.
-- **Prod är källan** för befintliga recept, ingredienskatalog, `kitchen`/`type` och cook-log. Lokal `recipe.db` är en gammal snapshot — använd den bara utan API-konfig, och flagga då att matchningen är best-effort.
+- **Receptdatabasen på Pi:n är källan** för befintliga recept, ingredienskatalog, `kitchen`/`type` och cook-log — nås bara via API:t (`RECIPE_API_URL`, Tailscale). En lokal `recipe.db` i repot är en gammal kopia från VPS-tiden; använd den inte. `https://recipedb.cloud` är den gamla VPS:en (frusen vid id 41) — länka aldrig dit.
 - **Renderaren äger utseendet.** Skriv aldrig HTML i den här skillen.
 - **Samma vecka = samma slug = samma URL.** Justeringar skriver över, de skapar inte en ny sida.
 - **Stabila `id`:n** mellan omkörningar, annars nollställs Nils bockningar.

@@ -1,9 +1,9 @@
 ---
 name: edit-recipe
-description: "Reflektera över ett redan publicerat recept efter att du lagat det, diskutera justeringar, och skapa en ny version i databasen. Triggas av /edit-recipe, eller fraser som 'jag lagade X igår', 'efterkok', 'reflektion kring [recept]', 'ändra/uppdatera/justera [recept]'. Skriver direkt till VPS-databasen via HTTP-API — fungerar lika bra från Cowork som från Claude Code."
+description: "Reflektera över ett redan publicerat recept efter att du lagat det, diskutera justeringar, och skapa en ny version i databasen. Triggas av /edit-recipe, eller fraser som 'jag lagade X igår', 'efterkok', 'reflektion kring [recept]', 'ändra/uppdatera/justera [recept]'. Skriver till receptdatabasen på Raspberry Pi:n (samma som Iris använder) via HTTP-API — fungerar lika bra från Cowork som från Claude Code."
 ---
 
-<!-- SKILL_VERSION: 2026-08-21 -->
+<!-- SKILL_VERSION: 2026-11-15 -->
 
 ## ⚠️ Versionskontroll — gör detta först
 
@@ -32,26 +32,32 @@ Läs `.claude/cowork-instructions.md` om den finns. Den definierar ton och samar
 Hjälp användaren att förbättra ett **redan publicerat** recept utifrån en konkret matlagningserfarenhet. Flödet är:
 
 1. Användaren skriver en kort reflektion (t.ex. "Pad Thai blev för söt och nudlarna klumpade ihop sig").
-2. Skillen hämtar nuvarande version från VPS-databasen.
+2. Skillen hämtar nuvarande version från receptdatabasen på Pi:n.
 3. Skillen föreslår 3–5 konkreta justeringar baserat på reflektionen.
 4. Iterera tills användaren är nöjd.
 5. Visa commit-preview med diff.
 6. På **"push"** — skriv ny version till databasen via API.
 
-Detta är skillen för **edits**. Nya recept hanteras av `recipe`-skillen (separat pending-commit-flöde).
+Detta är skillen för **edits**. Nya recept hanteras av `recipe`-skillen.
 
 ## Språk
 
 Allt på **svenska** — recepttitlar, fältinnehåll, change_note. Skillens UI-meddelanden mot användaren också på svenska.
+
+## Var databasen bor
+
+Receptdatabasen ligger på **Raspberry Pi:n `nils-rpi`** och delas med OpenClaw-agenten **Iris**. Den nås bara via API:t — **skriv aldrig direkt till SQLite**, och det finns ingen SSH till Pi:n. `https://recipedb.cloud` är den gamla VPS:en (frusen vid id 41) — använd den aldrig.
 
 ## Konfiguration — `.claude/.env`
 
 Skillen använder ett HTTP-API som ligger framför Flask-appen. Den behöver två env-variabler från `.claude/.env` (gitignored):
 
 ```
-RECIPE_API_URL=https://din-domän.example
-RECIPE_API_TOKEN=<lång slumpsträng, samma som på VPS>
+RECIPE_API_URL=http://100.127.88.96:5001
+RECIPE_API_TOKEN=<samma som RECIPE_API_TOKEN i recipe-db/.env på Pi:n>
 ```
+
+Läs tokenen ur filen vid varje anrop och **skriv aldrig ut den**. Ger den 401: säg det och be Nils om rätt token.
 
 Om filen eller variablerna saknas: rapportera tydligt och be användaren skapa `.claude/.env` (det finns en `.claude/.env.example` att kopiera). Kör inte vidare utan token.
 
@@ -122,7 +128,7 @@ Alla anrop kräver `Authorization: Bearer $RECIPE_API_TOKEN`.
 - `400` → invalid input. Två varianter:
   - Generellt valideringsfel — visa `error`-fältet.
   - `error: "Ingredient not in catalog"` med `ingredient_name` + `missing_fields`. Be användaren bekräfta: ska ingrediensen läggas till med en viss kategori + default_unit, eller är det en felstavning av något som redan finns? Försök först alias-matcha mot katalogen.
-- `401` / `503` → token/konfig-problem (be användaren kolla `.claude/.env` och `RECIPE_API_TOKEN` på VPS)
+- `401` / `503` → token/konfig-problem: 401 = tokenen i `.claude/.env` stämmer inte med Pi:ns `recipe-db/.env` (be Nils om rätt token), 503 = token inte satt på servern
 - `404` → recept finns inte
 - `409` → version-konflikt. Hämta recept igen, fråga användaren om de vill bygga om sin edit.
 - `500` → DB-fel, visa felet, fråga om de vill försöka igen.
@@ -260,10 +266,10 @@ Bekräftelse efter success:
 
 | Status | Hantering |
 |---|---|
-| 401 / 503 | "Token saknas eller är fel — kolla `.claude/.env` (Cowork) eller `RECIPE_API_TOKEN` på VPS." |
+| 401 / 503 | "Token saknas eller är fel — kolla `.claude/.env` mot `RECIPE_API_TOKEN` i `recipe-db/.env` på Pi:n." |
 | 404 | "Receptet med id N finns inte i databasen längre." |
 | 409 | "Någon annan editerade receptet (förmodligen via webb-UI). Hämtar senaste versionen — vill du bygga om din edit på den?" Hämta GET igen, visa skillnaden, fråga. |
-| 500 / nätverksfel | Visa felet rakt, fråga om retry. |
+| 500 / nätverksfel | Visa felet rakt, fråga om retry. Timeout → Pi:n eller Tailscale nere (`tailscale status`). |
 
 ## Viktiga regler
 
@@ -272,7 +278,8 @@ Bekräftelse efter success:
 - **expected_version_number** ska alltid skickas — det är skyddsnätet mot konflikter.
 - **Skicka bara fält som faktiskt ändras** i payloaden (utöver `change_note` och `expected_version_number`). Det gör diffar i historiken renare.
 - **Kanoniska ingrediensnamn**: använd `name` exakt som det stod i GET-svaret. Kolla `aliases`-arrayen innan du föreslår en "ny" ingrediens — den kan redan finnas som alias. Tillåtna kategorier: `Frukt och grönt`, `Färska örter`, `Mejeri`, `Kött`, `Fågel`, `Fläsk`, `Fisk`, `Kolhydrater`, `Baljväxter`, `Konserver`, `Smaksättare`, `Färdiga tillbehör`, `Bageri`, `Frys`, `Alkohol`, `Övrigt`. Nya ingredienser kräver också `default_unit`.
-- **Kategorisering utgår från PROD-data, aldrig från exempel eller minne.** Rör du fälten `kitchen`/`type`/`tags`: hämta först befintliga värden live med `GET $RECIPE_API_URL/api/recipe/search?q=` (tomt `q` = alla recept; dedupa `kitchen`/`type` ur svaret) och kopiera värdet exakt därifrån. `kitchen` skrivs ALLTID som emoji + mellanslag + text (`🇮🇹 Italienskt`, `🍜 Asiatiskt`) — finns bara en legacy-variant utan emoji i prod, normalisera till emoji-varianten och säg det i previewen. `type` är en kort maträttstyp med inledande versal utan emoji (`Tacos`, `Wok`); `tags` är kommaseparerade gemener.
+- **Kategorisering utgår från PROD-data, aldrig från exempel eller minne.** Rör du fälten `kitchen`/`type`/`tags`: hämta först befintliga värden live med `GET $RECIPE_API_URL/api/recipe/search?q=` (tomt `q` = alla recept; dedupa `kitchen`/`type` ur svaret) och kopiera värdet exakt därifrån. `kitchen` skrivs ALLTID som emoji + mellanslag + text (`🇮🇹 Italienskt`, `🍜 Asiatiskt`) — finns bara en legacy-variant utan emoji i prod, normalisera till emoji-varianten och säg det i previewen. `type` är exakt ett av `förrätt`, `huvudrätt`, `sidorätt`, `komponent`, `efterrätt` (gemener) — rättstypen (tacos, wok …) hör hemma i `tags`. Äldre recept kan ha legacy-värden (`Huvudrätt`, `Tacos`); rör du `type` på ett sådant, föreslå enum-värdet i previewen. `tags` är kommaseparerade gemener.
+- **Receptets form (husregler, gemensamma med Iris)**: 4 portioner som standard, numrerade steg med temperatur och tid, och `notes` med `💡 Proffstips:` (1–3), valfritt `🔬 Vetenskap:` och `🎨 Alternativ:` (1–3). Behåll den strukturen när du ändrar `notes`.
 - **Granularitet**: katalogen rymmer bara saker som inhandlas separat. Skriv `ägg` (inte `äggula`), `vitlök` (inte `vitlöksklyfta`). Nyans hör hemma i `recipe_ingredient.note` ("endast gula", "rivna").
 - **Image-fältet rörs inte** av det här flödet — bilduppladdning sker i webb-UI.
 - **Inga ID:n hårdkodas.** Slå alltid upp recept med `/api/recipe/search` först.

@@ -17,8 +17,8 @@ app = Flask(__name__)
 
 # Database configuration — plain SQLite.
 # Local dev: defaults to sqlite:///recipe.db.
-# VPS: DATABASE_URL is set via docker-compose to sqlite:///recipe.db
-#      and bind-mounted from /opt/recipe-db/data/recipe.db on the host.
+# Pi:  DATABASE_URL is set via docker-compose to sqlite:///recipe.db
+#      and bind-mounted from the recipe-db data dir on nils-rpi.
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///recipe.db")
 engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
 
