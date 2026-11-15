@@ -4,19 +4,26 @@ Den här filen orienterar en Claude Code-session som precis har öppnats i `reci
 
 ## Var du är
 
-Detta är Nils personliga receptdatabas. Du kör i `claude` (Claude Code) på hans Macbook. Du har direkt SSH-access till VPS:en via aliaset `ssh minvps` (som är `root@187.77.67.116`).
+Detta är Nils personliga receptdatabas. Du kör i `claude` (Claude Code) på hans Macbook. Systerverktyget är **Cowork** (desktop-appen).
 
-Systerverktyget är **Cowork** (desktop-appen).
+**Databasen ligger på Raspberry Pi:n `nils-rpi`** (sedan 2026-11). Flask-appen körs där i en container och delar databas med OpenClaw-agenten **Iris**.
 
-> ⚠️ **Rättelse (2026-08-21).** Här stod att Cowork "kör i en sandbox utan nätverksaccess till VPS:en". Det stämmer inte längre. Cowork når VPS-API:t (`recipedb.cloud`) via desktop-bryggan och kan skriva recept direkt med `POST /api/recipe` — verifierat 2026-08-21 (recept id 41 skapades den vägen). Pending-commit-flödet är därmed en **reservväg**, inte huvudspåret, och `.claude/pending-commits/` bör normalt vara tom.
+- API: `http://100.127.88.96:5001` (Tailscale), `http://192.168.1.82:5001` (LAN). Satt som `RECIPE_API_URL` i `.claude/.env`.
+- DB-fil på Pi:n: `/home/nilslunden/docker/openclaw/data/workspace/recipe-db/data/recipe.db` — rör den aldrig direkt.
+- **Ingen SSH till Pi:n** — och det behövs inte. Läsning och skrivning av recept går bara via HTTP-API:t.
+- Den gamla VPS:en (`minvps`, `/opt/recipe-db`, `https://recipedb.cloud`) är **ur bruk**. Dess databas är frusen vid recept-id 41. Använd den inte.
 
 ## Start-checklista
 
 1. **Synka skills till global mapp** för Claude Code: `bash scripts/sync-skills.sh`. Detta uppdaterar INTE Cowork — se "Skill-synkning" nedan.
 2. Läs `CLAUDE.md` (rotmappen) — särskilt "Working modes"-sektionen.
-3. Läs `docs/WORKFLOW_OVERHAUL_PLAN.md` — full plan för vad som ska göras.
-4. Kolla efter pending commits: `ls -la .claude/pending-commits/`. Om det finns filer där behöver de applicera till VPS.
-5. Verifiera SSH-access: `ssh minvps 'echo ok'`.
+3. Kolla efter pending commits: `ls -la .claude/pending-commits/`. Finns det filer: applicera dem via API:t (se nedan).
+4. Verifiera API:t (skriv aldrig ut tokenen):
+   ```bash
+   set -a; source .claude/.env; set +a
+   curl -sS -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $RECIPE_API_TOKEN" "$RECIPE_API_URL/api/recipe/search?q="
+   ```
+   200 = OK, 401 = fel token (be Nils om den från `recipe-db/.env` på Pi:n), timeout = Pi:n/Tailscale nere.
 
 ## Skill-synkning
 
@@ -41,55 +48,29 @@ Om du lägger till en ny skill: skapa under `.claude/skills/<namn>/SKILL.md`, k�
 
 ## Vad du gör — typiska uppgifter
 
-**"apply pending" / "push"** — Applicera pending-commits från Cowork:
+**Skapa recept** — följ `recipe`-skillen (brainstorm → preview → "push" → `POST /api/recipe`).
 
-1. Läs alla filer i `.claude/pending-commits/` (JSON-format, se schema i `docs/WORKFLOW_OVERHAUL_PLAN.md`).
-2. Visa batch-preview för användaren, bekräfta.
-3. För varje commit: bygg INSERT/UPDATE-SQL, kör via SSH på VPS:ens SQLite-fil (`/opt/recipe-db/data/recipe.db`), logga en rad i `recipe_version`.
-4. Vid success: flytta filen till `.claude/applied-commits/`.
-5. Vid error: rapportera, låt filen ligga kvar i pending.
+**Edita befintligt recept** — följ `edit-recipe`-skillen (`GET /api/recipe/<id>` → diff-preview → `POST /api/recipe/<id>/commit-edit`).
 
-**Edita befintligt recept** — Användaren säger "ändra recept X":
+**"apply pending"** — pending-commits från en session som inte nådde API:t:
 
-1. Läs aktuellt recept från VPS: `ssh minvps "sqlite3 /opt/recipe-db/data/recipe.db 'SELECT * FROM recipe WHERE id=<X>'"`.
-2. Föreslå ändringar i chatten, visa diff-preview.
-3. Vid bekräftelse: kör UPDATE via SSH, logga ny `recipe_version`-rad.
+1. Visa batch-preview av filerna i `.claude/pending-commits/`, bekräfta.
+2. `python3 scripts/skill_remote_commit.py .claude/pending-commits/*.json` — POSTar varje fil till API:t och flyttar lyckade till `.claude/applied-commits/`.
 
-**Skapa recept direkt i Claude Code** — Användaren brainstormar direkt här istället för i Cowork:
+**Kodändringar i Flask-appen** — det här repot ingår som submodul `recipe-db/` i `stranger-nils/iris-workspace`, och Pi:n kör den commit som submodulen pekar på. Flödet (sedan 2026-11-10): branch → PR i `stranger-nils/recipe-db` → Nils reviewar → merge till `master` → PR i `iris-workspace` som bumpar submodulen → merge → Iris deployar automatiskt (docker build/run + healthcheck; från värden finns `scripts/pi-deploy.sh` med `docker-compose.rpi.yml`). En push till `master` här deployar ingenting förrän submodulen är bumpad.
 
-1. Följ `recipe`-skillens standardflöde (brainstorm → preview → push).
-2. På push: kör direkt mot VPS (inte pending-commit). Logga version.
-
-**Köra migrationer** — t.ex. `scripts/migrations/001_recipe_version.py`:
-
-1. Testa lokalt först mot `recipe.db` om möjligt.
-2. Kör mot VPS: `scp scripts/migrations/001_recipe_version.py minvps:/tmp/ && ssh minvps 'python3 /tmp/001_recipe_version.py /opt/recipe-db/data/recipe.db'`.
-
-## Aktuellt läge (uppdateras allteftersom)
-
-**Fas 1 (cleanup)**: Klar. Utförd i Cowork på branchen `claude-workflow-overhaul`.
-
-**Fas 2 (versionshistorik)**: Ej påbörjad. **Ditt nästa jobb är troligen detta.** Se plan för schema och migration.
-
-**Fas 3 (skill ↔ VPS helper)**: Ej påbörjad. Efter fas 2.
-
-**Fas 4 (diff-UI)**: Ej påbörjad.
-
-**Fas 5 (inköpslistor i Flask)**: Ej påbörjad.
-
-**Fas 6 (Notion Kanban)**: Sköts i Cowork.
+**Migrationer** — körs på Pi:n via deploy-flödet ovan, inte via SSH härifrån.
 
 ## Viktiga paths
 
 - Lokal repo: (där du står nu)
-- Lokal DB-fil (kan vara stale/tom): `recipe.db` i repo-roten.
-- VPS DB-fil (auktoritativ): `/opt/recipe-db/data/recipe.db`.
-- VPS app-dir: `/opt/recipe-db/`.
-- Pending commits från Cowork: `.claude/pending-commits/`.
+- Lokal `recipe.db` i repo-roten: gammal kopia från VPS-tiden, bara för lokal utveckling. Aldrig källa för riktiga data.
+- Prod-DB: på Pi:n, nås bara via API:t.
+- Pending commits: `.claude/pending-commits/`.
 
 ## Säkerhetsregler
 
 - Rör aldrig master utan bekräftelse.
 - Kör aldrig `git push --force`.
-- Testa alla SQL-transaktioner i en `BEGIN; ... ROLLBACK;`-runda innan `COMMIT` om du är osäker.
-- Gör ALLTID en backup av VPS-DB:n innan migrationer: `ssh minvps 'cp /opt/recipe-db/data/recipe.db /opt/recipe-db/data/recipe.db.bak-$(date +%Y%m%d-%H%M%S)'`.
+- Skriv aldrig direkt till SQLite — allt går via API:t.
+- Skriv aldrig ut `RECIPE_API_TOKEN`.

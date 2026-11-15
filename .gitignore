@@ -28,5 +28,3 @@ skill_changes/
 # Får inte deployas till VPS:en.
 docker-compose.override.yml
 
-# Veckomeny-utkast (genereras; publiceras till Pi:n, inte till git)
-plans/

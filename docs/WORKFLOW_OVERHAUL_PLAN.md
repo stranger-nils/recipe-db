@@ -1,3 +1,5 @@
+> **Historiskt dokument (VPS-tiden).** Planen beskriver arkitekturen med VPS:en `minvps` och `/opt/recipe-db`. Sedan 2026-11 ligger databasen på Raspberry Pi:n `nils-rpi`, nås bara via HTTP-API:t, och appen deployas genom att submodulen `recipe-db/` i `stranger-nils/iris-workspace` bumpas. Se `CLAUDE.md` för nuläget. SSH- och scp-instruktionerna nedan gäller inte längre.
+
 # Workflow Overhaul Plan
 
 Detaljerad plan för omställningen av receptdatabasens workflow. Täcker rollfördelning mellan Cowork och Claude Code, synkronisering, versionshistorik, inköpslistor och Notion Kanban.

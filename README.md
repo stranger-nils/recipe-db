@@ -30,7 +30,7 @@ Recipe sites optimize for SEO. Recipe apps optimize for sign-ups. Notebooks lose
 - Reads like a cookbook, not a CRUD form.
 - Remembers that the recipe *changed* — and what the previous version looked like.
 - Lets me capture the small fix the moment I think of it ("less salt, longer in the oven"), without losing the original.
-- Stays mine. SQLite on a VPS I control, a bind-mounted folder, a `cp` away from a backup.
+- Stays mine. SQLite on a Raspberry Pi at home, a bind-mounted folder, a `cp` away from a backup.
 
 It's a love letter to the way recipes actually evolve — not as fixed artifacts, but as drafts you keep revisiting.
 
@@ -43,8 +43,8 @@ It's a love letter to the way recipes actually evolve — not as fixed artifacts
 | Backend | Flask + SQLAlchemy (raw SQL via `text()`, no ORM models) |
 | Database | SQLite — `recipe`, `ingredient`, `recipe_ingredient`, `recipe_version` |
 | Frontend | Jinja2 templates, vanilla JS, a single monospace family (IBM Plex Mono) |
-| Deploy | Docker + docker-compose + nginx on a small VPS, auto-deployed from `master` via GitHub Actions |
-| Images | Filesystem under `static/uploads/`, bind-mounted on the VPS |
+| Deploy | Docker on a Raspberry Pi, reached over Tailscale; deployed by PR + merge (an agent rolls it out) |
+| Images | Filesystem under `static/uploads/`, bind-mounted on the Pi |
 | Authoring | Web edit form, or the `recipe` / `edit-recipe` Claude skills via the HTTP API |
 
 No bundler. No Node. No framework on the frontend. The whole thing is intentionally small enough to read in an afternoon.
@@ -60,7 +60,7 @@ python app.py
 
 Then open <http://localhost:5001>.
 
-To deploy a copy on your own VPS, see `docker-compose.yml` and `.github/workflows/deploy.yml` — both are short and assume nothing exotic.
+To run a copy on your own server, see `docker-compose.yml` — it is short and assumes nothing exotic.
 
 ---
 
@@ -75,7 +75,7 @@ docs/                       # design notes and the workflow plan
 .claude/skills/             # recipe, edit-recipe, shopping-list — custom Claude skills
 ```
 
-The HTTP API lives in `app.py` under `/api/recipe/*` and is documented in [`CLAUDE.md`](CLAUDE.md), along with the working-modes split (Cowork for authoring, Claude Code for VPS shell work).
+The HTTP API lives in `app.py` under `/api/recipe/*` and is documented in [`CLAUDE.md`](CLAUDE.md), along with the working-modes split (Cowork for authoring, Claude Code for work on the Mac).
 
 ---
 

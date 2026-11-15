@@ -1,9 +1,9 @@
 ---
 name: grossist-order
-description: "Handla en inköpslista på Mathem i webbläsaren — slår upp varje vara, matchar mot rätt artikel och förpackningsstorlek, och fyller varukorgen. Slutför ALDRIG köpet; Nils klickar hem det själv. Triggas av /grossist-order eller fraser som 'handla listan', 'lägg i varukorgen', 'beställ maten', 'handla på Mathem', 'köp veckans varor'. Tar emot en lista från veckomeny-skillen, från /plan-fliken på receptsajten, eller klistrad i chatten."
+description: "Handla en inköpslista på Mathem i webbläsaren — slår upp varje vara, matchar mot rätt artikel och förpackningsstorlek, och fyller varukorgen. Slutför ALDRIG köpet; Nils klickar hem det själv. Triggas av /grossist-order eller fraser som 'handla listan', 'lägg i varukorgen', 'beställ maten', 'handla på Mathem', 'köp veckans varor'. Tar emot en lista från /plan-fliken på receptsajten, eller klistrad i chatten."
 ---
 
-<!-- SKILL_VERSION: 2026-08-30 -->
+<!-- SKILL_VERSION: 2026-11-15 -->
 
 ## ⚠️ Versionskontroll — gör detta först
 
@@ -107,7 +107,7 @@ Nyckeln är ingrediensens **kanoniska namn i receptdatabasen**, gemener. Då mat
 
 ### Steg 1 — Ta emot listan
 
-Tre källor: veckomeny-skillen (i sessionen), `plans/<slug>.json` (läs och aggregera själv), eller klistrad text.
+Två källor: `/plan`-fliken på receptsajten, eller klistrad text.
 
 Varje rad behöver **namn, mängd och enhet**. Saknas mängd, fråga.
 
@@ -195,6 +195,6 @@ Bytte Nils ut ett val du gjort: **skriv över posten med hans val.** Hans korrig
 
 - Slutför inga köp, väljer ingen leveranstid, rör inga betaluppgifter.
 - Loggar inte in och hanterar inga lösenord.
-- Bygger inga inköpslistor (→ `veckomeny`, eller `/plan`-fliken på sajten).
+- Bygger inga inköpslistor (→ `/plan`-fliken på sajten).
 - Skriver inte till receptdatabasen eller till Notion.
 - Handlar inte på andra sajter. Ska en annan butik stödjas är det en egen sidostruktur-sektion och en egen mappningsfil.

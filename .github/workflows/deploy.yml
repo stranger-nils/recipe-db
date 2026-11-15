@@ -1,9 +1,15 @@
-name: Deploy to VPS
+# LEGACY — the recipe DB and app moved from the VPS (minvps, /opt/recipe-db,
+# recipedb.cloud) to the Raspberry Pi (nils-rpi) in 2026-11. The Pi runs the
+# commit that the recipe-db/ submodule in stranger-nils/iris-workspace points
+# to: merge here → PR bumping the submodule there → merge → Iris runs
+# docker build/run + healthcheck (scripts/pi-deploy.sh, docker-compose.rpi.yml).
+#
+# This workflow no longer runs on push. It is kept, manual-only, in case the
+# old VPS needs one more deploy before it is shut down. Delete it then.
+name: Deploy to VPS (legacy, manual only)
 
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
 
 jobs:
   deploy:

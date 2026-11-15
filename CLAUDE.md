@@ -20,15 +20,14 @@ A personal recipe website — a clean, user-friendly gallery of favorite recipes
 - Recipe creation/editing via Claude in chat (`recipe` skill).
 - Version history per recipe — browse past versions and compare changes (diff view, similar to git diff).
 - Shopping list generation within the website: pick N recipes, produce a consolidated list grouped by grocery category. No AI chat involvement — pure web UI.
-- Shopping list generation via Claude in chat (`shopping-list` skill) — sources recipes from the Notion Recept-pipeline database, saves the result as a new entry in the Notion Inköpslistor database, categorized by store layout. **Being retired** in favour of the veckomeny flow below; kept as a fallback until that has run for a few weeks.
-- Weekly meal planning via Claude in chat (`veckomeny` skill) — proposes N dishes from existing DB recipes and/or new drafts, publishes them as a standalone HTML page on the Raspberry Pi (`nils-rpi`, tailnet only), and embeds a consolidated shopping list in that page. Drafts never touch the recipe DB; saving one goes through the `recipe` skill.
+- Shopping list generation via Claude in chat (`shopping-list` skill) — sources recipes from the Notion Recept-pipeline database, saves the result as a new entry in the Notion Inköpslistor database, categorized by store layout.
 - Grocery ordering via the browser (`grossist-order` skill) — takes a shopping list and fills a Mathem cart using the in-app browser. Learns an ingredient→product mapping over time (`references/mathem-mapping.json`). Never logs in, never completes a purchase.
 
 **Out of scope:**
 - AI chat / chatbot interface embedded in the website.
 - User authentication (personal site, no multi-user support planned).
-- Shopping list generation written into the SQLite recipe DB. Lists live either in Notion (legacy `shopping-list` skill) or inside a published veckomeny page.
-- Week plans / recipe drafts stored in the recipe DB. Drafts are throwaway until curated, so they live as JSON files in `plans/` and as pages on the Pi — deletable with `rm`, no migration.
+- Shopping list generation written into the SQLite recipe DB. Lists live in Notion (`shopping-list` skill) or are generated on the fly by the website's `/plan` tab.
+- Weekly meal planning. The former `veckomeny` skill, plan renderer and publishing scripts were removed in 2026-11; Nils plans his own menus.
 
 ## Working modes — where Claude runs
 
@@ -36,24 +35,20 @@ This project is worked on across two Claude environments with complementary role
 
 **Cowork (desktop app, sandboxed)** handles:
 - Recipe brainstorming and drafting *new* recipes (via the `recipe` skill).
-- Editing/iterating on *existing* recipes (via the `edit-recipe` skill) — writes directly to the VPS database over the authenticated HTTP API. No Claude Code roundtrip needed.
+- Editing/iterating on *existing* recipes (via the `edit-recipe` skill) — writes to the recipe DB on the Pi over the authenticated HTTP API. No Claude Code roundtrip needed. (Unverified since the move: the API is tailnet-only, so if Cowork can't reach it, use Claude Code.)
 - Notion Kanban management for the recipe pipeline.
 - Shopping list generation (via the `shopping-list` skill) — saves to the Notion Inköpslistor database.
-- Weekly meal planning (via the `veckomeny` skill) — reads prod over the HTTP API, writes `plans/<slug>.json`, renders the page with `scripts/build_plan_page.py`. Cannot publish to the Pi itself: the sandbox is not on the tailnet and has no SSH keys.
-- File/code edits that don't require VPS shell access (e.g., Flask feature work, template changes, docs).
-- Creating *new* recipes (via the `recipe` skill) — writes directly to the VPS database over the HTTP API (`POST /api/recipe`), same as edits. No Claude Code roundtrip needed. The pending-commit path (writing a JSON file to `.claude/pending-commits/` for Claude Code to apply via SSH) remains as a fallback when the API isn't configured/reachable, or when a manual review step is wanted.
+- File/code edits (e.g., Flask feature work, template changes, docs).
+- Creating *new* recipes (via the `recipe` skill) — writes over the HTTP API (`POST /api/recipe`), same as edits. The pending-commit path (a JSON file in `.claude/pending-commits/`, applied later through the same API with `scripts/skill_remote_commit.py`) is the fallback when the API isn't configured/reachable.
 
 **Claude Code (terminal on the user's Macbook)** handles:
-- Applying pending commits (new recipes) to the VPS database via SSH.
-- Running migrations against the VPS database (e.g., version history schema changes).
+- Creating and editing recipes via the `recipe` / `edit-recipe` skills over the HTTP API (the Mac is on the tailnet).
+- Applying pending commits via the API (`scripts/skill_remote_commit.py`).
 - Skill synchronization (project `.claude/skills/` → user-global `~/.claude/skills/`) at session start, so Cowork picks them up. See `scripts/sync-skills.sh`.
-- Any work that requires direct shell access to the VPS (`ssh minvps`) — server-side debugging, log inspection, container restarts.
-- Publishing week plans to the Pi (`scripts/publish-plan.sh`, over tailnet). On the Mac this can also run unattended via the launchd agent in `docs/autopublish.md`.
-- Note: edits to existing recipes can also be done via Claude Code, but the `edit-recipe` skill there uses the same HTTP API as Cowork — there's no longer a separate "direct SSH edit" path.
 
 Both `recipe` and `edit-recipe` skills work in either environment.
 
-See `docs/WORKFLOW_OVERHAUL_PLAN.md` for the detailed implementation plan, and `.claude/CLAUDE_CODE_BOOTSTRAP.md` for Claude Code session orientation. `docs/workflow.md` walks through the weekly ritual end to end (plan → publish → shop → cook → save). The week-plan pipeline is documented in `docs/pi-setup.md` (file server on the Pi, written to be executed by an agent) and `docs/autopublish.md` (optional launchd watcher on the Mac).
+See `docs/WORKFLOW_OVERHAUL_PLAN.md` for the detailed implementation plan, and `.claude/CLAUDE_CODE_BOOTSTRAP.md` for Claude Code session orientation.
 
 ## Skills
 
@@ -61,11 +56,10 @@ Custom skills for this project live in `.claude/skills/`. They are the source of
 
 | Skill | Purpose |
 |---|---|
-| `recipe` | Brainstorm and save *new* recipes. Primary path is the HTTP API (`POST /api/recipe`), which works from both Cowork and Claude Code. Pending-commits (Cowork) and direct SSH (Claude Code) remain as fallbacks when the API isn't configured. Slash: `/recipe`. |
+| `recipe` | Brainstorm and save *new* recipes. Writes only via the HTTP API (`POST /api/recipe`); pending-commits are the fallback when the API is unreachable. Follows the house rules shared with Iris (4 portions, numbered steps with temp/time, pro tips + alternatives in `notes`, `type` enum). Slash: `/recipe`. |
 | `edit-recipe` | Iterate on an *existing* recipe via post-cook reflection. Reads/writes via the HTTP API (`RECIPE_API_TOKEN`). Logs a new version with a `change_note`. Slash: `/edit-recipe`. |
-| `shopping-list` | Build a consolidated shopping list from recipes in the Notion Recept-pipeline; save as a categorized entry in the Notion Inköpslistor database. Legacy — superseded by `veckomeny`. |
+| `shopping-list` | Build a consolidated shopping list from recipes in the Notion Recept-pipeline; save as a categorized entry in the Notion Inköpslistor database. |
 | `grossist-order` | Fill a Mathem cart from a shopping list. Reads search results as text, adds via each product article's own button, and remembers the chosen product URL per ingredient. Stops at a filled cart — Nils checks out himself. Slash: `/grossist-order`. |
-| `veckomeny` | Plan the week: propose N dishes (existing recipes, new drafts, or a mix), publish them as a page on `nils-rpi`, and embed a consolidated shopping list. Never writes to the recipe DB. Slash: `/veckomeny`. |
 
 **Sync:** Cowork only discovers skills under `~/.claude/skills/`, not project-level. `scripts/sync-skills.sh` mirrors `.claude/skills/` → `~/.claude/skills/` and is run by Claude Code at session start. Always edit skills in this repo, never directly in the global folder — global edits get overwritten on next sync.
 
@@ -82,10 +76,7 @@ Starts Flask dev server on `http://localhost:5001`.
 pip install -r requirements.txt
 ```
 
-**Production start (via Docker on VPS):**
-```bash
-docker compose up --build -d
-```
+**Production:** runs on the Pi, deployed via a submodule bump in `iris-workspace` (see Deployment below).
 
 **Import CSV data to SQLite (one-off bootstrap):**
 ```bash
@@ -96,19 +87,20 @@ python scripts/csv_to_sqlite.py
 
 Single-file Flask app (`app.py`) with Jinja2 templates and SQLAlchemy for database access.
 
-**Database:** SQLite, used both locally and in production.
-- Local dev: `recipe.db` in repo root (bind-mounted out of the Docker container when running locally via compose, or used directly by `python app.py`).
-- Production (VPS): `/opt/recipe-db/data/recipe.db`, bind-mounted into the container at `/app/recipe.db`.
+**Database:** SQLite.
+- Production: on the Raspberry Pi `nils-rpi`, at `/home/nilslunden/docker/openclaw/data/workspace/recipe-db/data/recipe.db` (inside the OpenClaw container: `/root/.openclaw/workspace/recipe-db/data/recipe.db`). Shared with the OpenClaw agent Iris. **Only reached via the HTTP API** — no SSH, never write to the file directly.
+- Local dev: `recipe.db` in repo root (an old copy from the VPS era; not a source of truth).
 - Connection configured via the `DATABASE_URL` env var; defaults to `sqlite:///recipe.db`.
 - Raw SQL via SQLAlchemy `text()` — no ORM models, just direct queries.
+- Retired: the VPS (`minvps`, `/opt/recipe-db`, `https://recipedb.cloud`). Its DB is frozen at recipe id 41.
 
 **Tables:** `recipe`, `ingredient`, `recipe_ingredient` (many-to-many junction). Version history (`recipe_version`) is a planned addition; see the workflow overhaul plan.
 
-**Image storage:** Local filesystem in `static/uploads/` on both local dev and VPS. On VPS, bind-mounted from `/opt/recipe-db/data/uploads`.
+**Image storage:** Local filesystem in `static/uploads/`, bind-mounted from the data dir on the Pi.
 
 **Frontend:** Inline CSS in Jinja2 templates, jQuery + Select2 for multi-select ingredient filters, vanilla JS elsewhere. No build step.
 
-**Deployment:** VPS (Debian/Ubuntu), Docker + docker-compose + nginx reverse proxy. GitHub Actions (`.github/workflows/deploy.yml`) runs `git pull && docker compose up --build -d` on push to `master` via SSH.
+**Deployment:** The app runs in a container on the Pi (`nils-rpi`), API at `http://100.127.88.96:5001` (Tailscale) / `http://192.168.1.82:5001` (LAN). This repo is the `recipe-db/` submodule of `stranger-nils/iris-workspace`; the Pi runs whatever commit the submodule points to. Since 2026-11-10 code changes go branch → PR in `stranger-nils/recipe-db` → Nils reviews → merge to `master` → PR in `iris-workspace` bumping the submodule → merge → Iris deploys automatically (docker build/run + healthcheck; on the host: `scripts/pi-deploy.sh` with `docker-compose.rpi.yml`). New recipes need no deploy. Pushing to `master` here deploys nothing until the submodule is bumped; the old VPS workflow (`.github/workflows/deploy.yml`) is manual-only legacy.
 
 ## Recipe HTTP API
 
@@ -116,10 +108,10 @@ The Flask app exposes a small JSON API used by the `recipe` and `edit-recipe` sk
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/recipe/search?q=<text>` | GET | Title substring search; returns `{results: [{id, title, section, menu}]}`. |
+| `/api/recipe/search?q=<text>` | GET | Title substring search; returns `{results: [{id, title, kitchen, type}]}`. Empty `q` = all recipes. |
 | `/api/recipe/<id>` | GET | Full recipe + ingredients + `current_version_number`. |
 | `/api/recipe` | POST | Create a new recipe. Body: `title` (required) + optional `description`, `instructions`, `notes`, `tags`, `type`, `kitchen`, `ingredients`. New ingredients need `grocery_category` + `default_unit` (else 400 with `missing_fields`). Creates the recipe, links ingredients, and writes `recipe_version` v1 atomically. Returns 201. |
-| `/api/cook-log?since=<YYYY-MM-DD>` | GET | What has been cooked and when — `{results: [{recipe_id, title, version_number, cooked_at, rating}]}`, newest first. Used by `veckomeny` to avoid re-suggesting recent dishes. |
+| `/api/cook-log?since=<YYYY-MM-DD>` | GET | What has been cooked and when — `{results: [{recipe_id, title, version_number, cooked_at, rating}]}`, newest first. |
 | `/api/recipe/<id>/commit-edit` | POST | Apply an edit. Body must include `change_note` and `expected_version_number`; remaining fields are partial — missing fields keep current values. Returns 409 on optimistic version conflict. |
 
 Server-side logic lives in `apply_recipe_edit()` (edits) and `create_recipe()` (new recipes) in `app.py`, the same functions the web edit/new forms build on. New version rows are tagged `changed_by='chat'` (skill) or `'web'` (form).
@@ -130,4 +122,5 @@ Server-side logic lives in `apply_recipe_edit()` (edits) and `create_recipe()` (
 |----------|---------|
 | `DATABASE_URL` | SQLite connection string; defaults to `sqlite:///recipe.db`. |
 | `FLASK_SECRET_KEY` | Session encryption. |
-| `RECIPE_API_TOKEN` | Bearer token for `/api/recipe/*`. Set on VPS in `/opt/recipe-db/.env`. If empty/unset the API returns 503. The Cowork-side token lives in `.claude/.env` (gitignored) — see `.claude/.env.example`. |
+| `RECIPE_API_TOKEN` | Bearer token for `/api/recipe/*`. Set on the Pi in `recipe-db/.env`. If empty/unset the API returns 503. The client-side copy lives in `.claude/.env` (gitignored, never print it) — see `.claude/.env.example`. |
+| `RECIPE_API_URL` | Client-side only (`.claude/.env`): `http://100.127.88.96:5001` (Pi over Tailscale). |

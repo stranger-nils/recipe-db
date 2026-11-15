@@ -3,7 +3,7 @@ name: recipe
 description: "Brainstorma receptidéer, föreslå kompletta recept på svenska och spara nya recept till SQLite-databasen. Triggas när användaren vill ha receptförslag, matinspiration, middagstips, eller spara ett nytt recept. Nyckelord: recept, middag, mat, laga, ingredienser, spara recept, push, brainstorm. För att redigera/uppdatera/justera ett befintligt recept — använd skillen edit-recipe istället."
 ---
 
-<!-- SKILL_VERSION: 2026-08-21 -->
+<!-- SKILL_VERSION: 2026-11-15 -->
 
 ## ⚠️ Versionskontroll — gör detta först
 
@@ -35,32 +35,36 @@ Hjälp användaren brainstorma receptidéer och spara nya recept i databasen. Vi
 ## Språk
 Alla recept, ingredienser och instruktioner ska vara på **svenska**.
 
-## Spara-vägar — HTTP-API först
+## Var databasen bor
 
-Nya recept sparas via **HTTP-API:t** (`POST /api/recipe`) — samma mellanlager som `edit-recipe` använder. Det fungerar **i båda miljöerna** (Cowork och Claude Code), kräver ingen SSH, och är **förstahandsvalet**. API:t skapar receptet, kopplar ingredienser och loggar `recipe_version` v1 i en transaktion — och returnerar ett tydligt fel om en ny ingrediens saknar `grocery_category`/`default_unit`, så du kan rätta direkt utan manuell granskning.
+Receptdatabasen ligger på **Raspberry Pi:n `nils-rpi`**. Flask-appen körs där i en container, och samma databas används av OpenClaw-agenten **Iris** — det du sparar här syns för henne och tvärtom.
 
-Två reservvägar finns kvar för när API:t inte är konfigurerat/nåbart:
-- **Pending-commit** (Cowork utan API): skriv commit till fil, Claude Code applicerar senare.
-- **Direkt SSH** (Claude Code): kör transaktion mot VPS-DB:n.
+- API: `http://100.127.88.96:5001` (Tailscale) — på hemma-LAN även `http://192.168.1.82:5001`.
+- **Skriv aldrig direkt till SQLite** — inte till Pi:ns fil, inte till någon lokal `recipe.db`. Allt går via API:t.
+- Ingen SSH till Pi:n behövs eller finns.
+- `https://recipedb.cloud` är den **gamla VPS:en**, frusen vid recept-id 41. Använd den aldrig.
+- Nya recept kräver ingen deploy.
+
+## Spara-väg — HTTP-API, pending-commit som reserv
+
+Nya recept sparas via **HTTP-API:t** (`POST /api/recipe`) — samma mellanlager som `edit-recipe` och Iris använder. Det fungerar i både Cowork och Claude Code och skapar receptet, kopplar ingredienser och loggar `recipe_version` v1 i en transaktion.
 
 **Välj väg vid push:**
 
 1. Sourca `.claude/.env` och kontrollera `RECIPE_API_URL` + `RECIPE_API_TOKEN` (se Konfiguration nedan).
-2. Är båda satta → **använd HTTP-API:t** (Steg 3a). Detta är normalfallet, oavsett miljö.
-3. Saknas konfig → fall tillbaka: pending-commit i Cowork (Steg 3b), eller direkt SSH om `ssh minvps` svarar (Steg 3c, Claude Code).
+2. Båda satta och API:t svarar → **HTTP-API:t** (Steg 3a). Normalfallet.
+3. Saknas konfig, eller API:t går inte att nå → **pending-commit** (Steg 3b). Filen appliceras senare via API:t med `scripts/skill_remote_commit.py`.
 
-Kommunicera tydligt vid push vilken väg som användes ("sparad direkt till VPS via API" vs "sparad som pending commit — växla till Claude Code för att applicera").
+Säg tydligt vid push vilken väg som användes ("sparad i receptdatabasen på Pi:n via API" vs "sparad som pending commit — appliceras när API:t går att nå").
 
 ## Konfiguration — `.claude/.env`
 
-HTTP-API:t kräver två env-variabler från `.claude/.env` (gitignored, samma fil som `edit-recipe` använder):
-
 ```
-RECIPE_API_URL=https://din-domän.example
-RECIPE_API_TOKEN=<lång slumpsträng, samma som på VPS>
+RECIPE_API_URL=http://100.127.88.96:5001
+RECIPE_API_TOKEN=<samma som RECIPE_API_TOKEN i recipe-db/.env på Pi:n>
 ```
 
-Saknas filen/variablerna: använd en reservväg (pending-commit eller SSH). Det finns en `.claude/.env.example` att kopiera.
+**Skriv aldrig ut tokenen** — inte i chatten, inte i loggar, inte i kommandon som ekar den. Läs den ur filen vid varje anrop. Svarar API:t 401 med tokenen i `.claude/.env`: säg det och be Nils om rätt token (den finns i `recipe-db/.env` på Pi:n). Det finns en `.claude/.env.example` att kopiera.
 
 **Sourca .env i bash så här:**
 
@@ -76,16 +80,37 @@ set +a
 [ -n "$RECIPE_API_URL" ] && [ -n "$RECIPE_API_TOKEN" ] || echo "NO_API_CONFIG"
 ```
 
+## Receptets innehåll — husregler (gemensamma med Iris)
+
+Varje recept som föreslås och sparas ska följa detta:
+
+1. **Komplett och på svenska**: titel, kort beskrivning, ingredienser med mängd + enhet, instruktioner, `notes`, kategorisering.
+2. **4 portioner** som standard, om inte Nils säger annat. Ange portionerna i beskrivningen eller i första steget.
+3. **Numrerade steg** (`1. …\n2. …`) med **temperatur och tid** där det är relevant ("Rosta i ugnen på 225 °C i 20–25 min", "Bryn på hög värme 2–3 min per sida").
+4. **`notes`** samlar tips, vetenskap och alternativ i den här formen (samma som Iris recept):
+   ```
+   💡 Proffstips:
+   - 1–3 konkreta tips
+   🔬 Vetenskap:
+   - (valfritt) varför tekniken fungerar
+   🎨 Alternativ:
+   - 1–3 alternativ (byten, varianter, vegetariskt)
+   ```
+   Proffstips (1–3) och alternativ (1–3) är obligatoriska; vetenskap är valfritt.
+5. **Ingredienser** matchas mot ingredient-tabellen (`name` + `aliases`, case-insensitive) och får sitt **kanoniska namn**. En ny ingrediens kräver `grocery_category` (fast lista nedan) och `default_unit`.
+6. **`kitchen`** har alltid emoji-prefix (`🇮🇹 Italienskt`). **`tags`** skrivs med gemener.
+7. **`type`** är en av: `förrätt`, `huvudrätt`, `sidorätt`, `komponent`, `efterrätt` (gemener). Rättstypen (tacos, wok, pasta, soppa …) hör hemma i `tags`.
+8. **Visa alltid en preview** och spara först när Nils säger **"push"**.
+9. Vid `400` med `missing_fields`: rätta och POSTa igen.
+
 ## ⚠️ Vanliga fallgropar — läs INNAN du sparar
 
-Gäller **både** API-body (`POST /api/recipe`) och pending-commit JSON:
+Gäller **både** API-body och pending-commit JSON:
 
-1. **Fältnamnen är `type` och `kitchen`** — INTE `section`/`menu`. Det gamla schemat döptes om i migration 005. Använder du `section`/`menu` kommer recepten sparas med NULL i kategorisering.
-2. **Varje *ny* ingrediens MÅSTE ha `default_unit`** (inte bara `unit`) **och** `grocery_category`. Båda är NOT NULL/CHECK i DB:n — saknas något rejectas en ny ingrediens (API svarar 400 med `missing_fields`).
-3. **`kitchen`/`type` sätts ALDRIG ur minnet eller från exempel — de MÅSTE bygga på en live-query mot prod.** Kör query-steget i "Kategoriseringskonventioner" (`GET /api/recipe/search?q=`) innan varje preview och kopiera värdet därifrån.
-4. **`kitchen` skrivs ALLTID som emoji + mellanslag + text** (`"🇮🇹 Italienskt"`, `"🍜 Asiatiskt"`) — aldrig bara `"Italienskt"`. **`type` är en kort maträttstyp med inledande versal** utan emoji (`"Tacos"`, `"Wok"`). Finmaskigare beskrivning (t.ex. `salsa`, `snabbt`, `vegetariskt`) hör hemma i `tags`.
-
-Se de fullständiga schemana längre ner — kopiera från dem, inte från minnet.
+1. **Fältnamnen är `type` och `kitchen`** — INTE `section`/`menu` (döptes om i migration 005). Fel namn → NULL i kategoriseringen.
+2. **Varje *ny* ingrediens MÅSTE ha `default_unit`** (inte bara `unit`) **och** `grocery_category`. Annars 400 med `missing_fields`.
+3. **`kitchen` sätts aldrig ur minnet** — hämta befintliga värden live via API:t (se "Kategoriseringskonventioner") och kopiera därifrån.
+4. **`type` är enum-värdet med gemener**, inte en rättstyp. Databasen innehåller äldre värden som `Huvudrätt`, `Tacos`, `Wok` — återanvänd dem inte.
 
 ## Databas
 
@@ -98,70 +123,16 @@ recipe_version (id, recipe_id, version_number, title, description, instructions,
                 tags, type, kitchen, ingredients_json, changed_at, changed_by, change_note)
 ```
 
-`ingredient` är en **kanonisk katalog** (migration 006). Varje rad måste ha:
+`ingredient` är en **kanonisk katalog** (migration 006). Varje rad har:
 - `name` (UNIQUE COLLATE NOCASE)
-- `grocery_category` (NOT NULL, måste vara från listan nedan)
+- `grocery_category` (NOT NULL, från listan nedan)
 - `default_unit` (NOT NULL — t.ex. `g`, `dl`, `msk`, `tsk`, `st`, `klyfta`, `kruka`, `knippe`, `burk`)
 - `kitchen_staple` (0/1)
 - `aliases` (JSON-array, t.ex. `["korriander", "coriander"]`)
 
 Inga dubletter tillåts. Felstavningar/synonymer går i `aliases` på den kanoniska raden.
 
-### Auktoritativ DB-path (Claude Code-läge)
-
-På VPS: `/opt/recipe-db/data/recipe.db`. Nås via `ssh minvps`.
-
-För en snabb läsning från VPS:
-```bash
-ssh minvps "sqlite3 /opt/recipe-db/data/recipe.db 'SELECT ...'"
-```
-
-För en transaktion (bygg SQL som text, pipea in):
-```bash
-cat sql-kommandon.sql | ssh minvps 'sqlite3 /opt/recipe-db/data/recipe.db'
-```
-
-Viktigt: inkapsla alla skrivoperationer i `BEGIN; ... COMMIT;` (eller `ROLLBACK` vid fel).
-
-### Lokal snapshot (Cowork-läge)
-
-I Cowork-läge finns en lokal `recipe.db` i projektroten som en **read-only snapshot** av VPS-databasen.
-
-> ⚠️ **Snapshoten är ofta månadsgammal och får ALDRIG vara auktoritativ när API:t är konfigurerat.**
-> Den uppdateras bara manuellt och ligger i praktiken långt efter prod. Observerat fall: snapshoten
-> innehöll 97 ingredienser och 3 `kitchen`-värden medan prod hade 203 respektive 18 — vilket ledde till
-> att redan existerande ingredienser (`jätteräkor`, `flingsalt`) föreslogs som NYA i previewen.
-> Använd snapshoten **endast** som fallback när `RECIPE_API_URL`/`RECIPE_API_TOKEN` saknas, och flagga
-> då i previewen att matchningen är best-effort mot inaktuella data.
-
-När den ändå används är det för:
-- Ingrediens-matching (best-effort: "denna ingrediens finns troligen redan")
-- Preview-data (titlar av existerande recept etc.)
-
-Skillen **skriver aldrig** till lokal `recipe.db` i Cowork-läge. All data skapas som pending-commit-JSON.
-
-**Hitta lokal DB dynamiskt:**
-```python
-import glob
-hits = glob.glob("/sessions/*/mnt/recipe-db/recipe.db")
-db_path = hits[0] if hits else None
-```
-
-Om snapshoten saknas/är tom: arbeta vidare med anteckning till användaren ("kunde inte läsa lokal snapshot — ingrediens-matching blir best effort; gör en `scp` från VPS om du vill ha aktuell data").
-
-### Läs-mönster (gäller båda lägen för lokal snapshot)
-
-Det monterade filsystemet (Cowork) stöder inte SQLites journal-mode vid läsning med öppna handles. Använd copy-to-temp vid läsning av lokal snapshot:
-
-```python
-import sqlite3, shutil, tempfile, os
-
-def read_snapshot(db_path):
-    tmp = tempfile.mktemp(suffix='.db')
-    shutil.copy(db_path, tmp)
-    conn = sqlite3.connect(tmp)
-    return conn, tmp  # ansvar att stänga conn + radera tmp
-```
+Databasfilen ligger på Pi:n och nås **bara via API:t**. En eventuell lokal `recipe.db` i repot är en gammal kopia från VPS-tiden — använd den inte.
 
 ### Tillåtna grocery_category-värden (fast lista, CHECK constraint i DB)
 `Frukt och grönt`, `Färska örter`, `Mejeri`, `Kött`, `Fågel`, `Fläsk`, `Fisk`,
@@ -172,66 +143,45 @@ Använd **exakt** dessa strängar — DB:n rejectar allt annat.
 
 ### Ingrediens-canonicalization — VIKTIGT
 
-Ingredient-tabellen tillåter inga dubletter. Innan du föreslår en ingrediens:
-
-1. **Bygg ingredienskatalogen från PROD** — obligatoriskt när API:t är konfigurerat, precis som för `kitchen`/`type`. Det finns ingen `/api/ingredient`-endpoint, så katalogen härleds genom att hämta alla recept och samla deras ingrediensnamn (kodblocket nedan). Slå upp mot både `name` (NOCASE) **och** `aliases`. Endast om API-konfig saknas: fall tillbaka på lokal snapshot och flagga det i previewen.
-2. **Matchar något** → använd det kanoniska namnet exakt som det står i DB. Inte din egen variant.
-3. **Granularitet**: katalogen ska bara innehålla saker som **handlas separat i butik**. Exempel:
-   - `ägg` finns. `äggula`/`äggvita` finns **inte** — det är samma inköp. Skriv `ägg` som ingrediens och lägg "endast gulor" i `recipe_ingredient.note`.
+1. **Bygg ingredienskatalogen via API:t** (kodblocket nedan). Det finns ingen `/api/ingredient`-endpoint, så katalogen härleds ur alla recept — `GET /api/recipe/<id>` returnerar per ingrediens `name`, `aliases`, `grocery_category`, `default_unit`, `kitchen_staple`.
+2. **Matcha** mot `name` och `aliases`, case-insensitive. Träff → använd det kanoniska `name` exakt.
+3. **Granularitet**: katalogen innehåller bara saker som **handlas separat i butik**:
+   - `ägg` finns. `äggula`/`äggvita` finns **inte** — skriv `ägg` och lägg "endast gulor" i `note`.
    - `gullök` och `silverlök` finns separat (olika inköp).
    - `vitlök` finns (default_unit `klyfta`). Skriv aldrig `vitlöksklyfta` som egen rad — det är ett alias.
-4. **Ny ingrediens behövs** → du måste alltid ange `grocery_category` (från listan ovan) **och** `default_unit` i pending-commit/preview. Annars rejectar DB:n (CHECK + NOT NULL).
+4. **Ny ingrediens** → ange alltid `grocery_category` (från listan) **och** `default_unit` (och `kitchen_staple`). Markera den `(NY)` i previewen — men bara om den saknas i katalogen från API:t.
 
-**Lookup-mönster A — mot PROD via API (förstahandsval):**
 ```python
 import json, os, urllib.request
 base, tok = os.environ['RECIPE_API_URL'], os.environ['RECIPE_API_TOKEN']
 
 def _get(path):
     req = urllib.request.Request(base + path, headers={'Authorization': 'Bearer ' + tok})
-    return json.load(urllib.request.urlopen(req))
+    return json.load(urllib.request.urlopen(req, timeout=15))
 
-def prod_ingredient_catalog():
-    """{lowercase namn: set(enheter)} härlett ur alla recept i prod."""
-    res = _get('/api/recipe/search?q=')
-    rows = res['results'] if isinstance(res, dict) else res
+def ingredient_catalog():
+    """{lowercase namn eller alias: kanonisk ingrediens-dict}, härlett ur alla recept."""
+    rows = _get('/api/recipe/search?q=')['results']
     cat = {}
     for r in rows:
-        d = _get('/api/recipe/%d' % r['id'])
-        for ing in (d.get('ingredients') or d.get('recipe', {}).get('ingredients') or []):
-            if ing.get('name'):
-                cat.setdefault(ing['name'].lower(), set()).add(ing.get('unit') or '')
+        for ing in _get('/api/recipe/%d' % r['id']).get('ingredients') or []:
+            if not ing.get('name'):
+                continue
+            for key in [ing['name'], *(ing.get('aliases') or [])]:
+                cat.setdefault(key.lower(), ing)
     return cat
-```
 
-Markera en ingrediens som `(NY)` i previewen **först** när den saknas i den här prod-katalogen — aldrig utifrån snapshoten.
-
-**Lookup-mönster B — mot lokal snapshot (endast utan API-konfig):**
-```python
-def resolve_ingredient(conn, query):
-    """Returnerar (id, canonical_name) eller (None, None)."""
-    row = conn.execute(
-        "SELECT id, name FROM ingredient WHERE name = ? COLLATE NOCASE",
-        (query,),
-    ).fetchone()
-    if row:
-        return row
-    # Alias-lookup
-    import json
-    for rid, name, aliases_json in conn.execute(
-        "SELECT id, name, aliases FROM ingredient"
-    ):
-        if query.lower() in [a.lower() for a in json.loads(aliases_json or '[]')]:
-            return (rid, name)
-    return (None, None)
+def resolve(cat, name):
+    """Returnerar kanoniskt namn eller None (= ny ingrediens)."""
+    hit = cat.get(name.lower())
+    return hit['name'] if hit else None
 ```
 
 ### Kategoriseringskonventioner (kitchen, type, tags)
 
-**Källan för namngivning är PROD-databasen — aldrig exempel i den här filen och aldrig ditt minne.** Innan du föreslår `kitchen`/`type` i en commit-preview MÅSTE du hämta de befintliga värdena live via API:t (obligatoriskt steg, ingen genväg):
+Hämta befintliga värden live innan varje preview:
 
 ```bash
-set -a; source <path till .claude/.env>; set +a
 curl -sS -H "Authorization: Bearer $RECIPE_API_TOKEN" \
   "$RECIPE_API_URL/api/recipe/search?q=" \
 | python3 -c "
@@ -242,32 +192,32 @@ print('TYPE:',    sorted({r['type']    for r in rows if r['type']}))
 "
 ```
 
-(`q=` tomt → alla recept med `kitchen`/`type` returneras.) Endast om API:t inte är konfigurerat: fall tillbaka på lokal snapshot (`SELECT DISTINCT kitchen FROM recipe` osv.) — men flagga då i previewen att listan kan vara inaktuell.
+(`q=` tomt → alla recept med `id`, `title`, `kitchen`, `type`.)
 
-**Välj `kitchen` så här, i ordning:**
+**`kitchen`, i ordning:**
 
-1. **Exakt emoji-variant finns i query-resultatet** (t.ex. `🇮🇹 Italienskt`) → använd den strängen tecken för tecken. Kopiera från query-utdatan, skriv den inte ur minnet.
-2. **Bara en variant utan emoji finns** (legacy-data, t.ex. `Italienskt`) → använd INTE den rakt av. Bilda emoji-varianten av samma text (`🇮🇹 Italienskt`) och markera i previewen att det är en normaliserad variant av ett befintligt värde.
-3. **Köket finns inte alls** → skapa nytt enligt mönstret **emoji + mellanslag + text med inledande versal**: flaggemoji för nationella kök (`🇮🇹 Italienskt`), annars en passande emoji (`🍜 Asiatiskt`, `🍲 Grunder`). Markera i previewen med `(NYTT kök)`.
+1. **Exakt emoji-variant finns** (t.ex. `🇮🇹 Italienskt`) → använd strängen tecken för tecken, kopierad från utdatan.
+2. **Bara en variant utan emoji finns** (legacy) → bilda emoji-varianten av samma text och markera i previewen att den är normaliserad.
+3. **Köket finns inte** → nytt värde: **emoji + mellanslag + text med inledande versal** (flagga för nationella kök, annars passande emoji: `🍜 Asiatiskt`, `🍲 Grunder`). Markera `(NYTT kök)`.
 
-`kitchen` utan emoji är ALLTID fel att skriva — även om prod råkar innehålla sådana legacy-värden.
+`kitchen` utan emoji är alltid fel.
 
-**`type`**: samma princip — kör samma query och återanvänd ett befintligt värde exakt om det passar (t.ex. `Tacos`, `Nudlar`, `Wok`). Ingen emoji. Inget passar → nytt kort värde med inledande versal, markerat `(NYTT)` i previewen.
+**`type`**: exakt ett av `förrätt`, `huvudrätt`, `sidorätt`, `komponent`, `efterrätt`. Gemener, ingen emoji. (En sås, fond eller dressing som används i andra rätter = `komponent`.)
 
-**`tags`**: kommaseparerade, gemener: t.ex. `italiensk,pasta` eller `stark, nötkött`. Ingen emoji.
+**`tags`**: kommaseparerade, gemener, ingen emoji. Här hamnar rättstyp, råvara och karaktär: `tacos,mexikanskt,nötkött,stark`.
 
 ## Arbetsflöde — Nytt recept
 
 ### Steg 1 — Brainstorming
-Ge **kompletta** receptförslag direkt (titel, beskrivning, ingredienser med mängd/enhet, numrerade instruktioner). Anpassa efter användarens önskemål. Var kreativ men praktisk — rätter man faktiskt vill laga hemma.
+Ge **kompletta** receptförslag enligt husreglerna ovan (4 portioner, numrerade steg med temp/tid, proffstips + alternativ). Anpassa efter önskemål. Kreativt men praktiskt — rätter man faktiskt vill laga hemma.
 
 ### Steg 2 — Commit preview
 
-När användaren gillar ett recept och vill spara:
+När Nils gillar ett recept och vill spara:
 
-1. **Bygg ingredienskatalogen från prod** via API:t (`prod_ingredient_catalog()`) och matcha mot den. Snapshot/VPS-läsning används bara om API-konfig saknas.
-2. **Hämta befintliga `kitchen`/`type`-värden från prod** med query-steget i "Kategoriseringskonventioner" (`GET $RECIPE_API_URL/api/recipe/search?q=`). Detta är obligatoriskt — hoppa aldrig över det.
-3. **Föreslå kategorisering** utifrån query-resultatet: `tags` (gemener, kommaseparerade), `type` (befintligt värde eller nytt med versal, markera `(NYTT)`), `kitchen` (befintlig emoji-variant exakt som i prod, eller normaliserad/ny enligt reglerna — ALLTID emoji + text).
+1. **Bygg ingredienskatalogen** via API:t (`ingredient_catalog()`) och matcha varje ingrediens.
+2. **Hämta befintliga `kitchen`-värden** med query-steget ovan.
+3. **Föreslå kategorisering**: `tags` (gemener), `type` (enum), `kitchen` (befintlig emoji-variant, normaliserad eller ny).
 4. **Visa preview:**
 
 ```
@@ -275,29 +225,39 @@ När användaren gillar ett recept och vill spara:
 ═══════════════════════════════════
 
 📖 Recept: [titel]
+   [beskrivning]
+   Portioner: 4
    tags: [tags]
-   type: [type]         (befintligt i prod / NYTT)
-   kitchen: [kitchen]   (befintligt i prod / normaliserat / NYTT kök)
+   type: [type]
+   kitchen: [kitchen]   (befintligt / normaliserat / NYTT kök)
 
 🥕 Ingredienser:
-   - [kanoniskt namn] — [mängd] [enhet]   (existerande)
+   - [kanoniskt namn] — [mängd] [enhet]   (befintlig)
    - [nytt namn] — [mängd] [enhet]        (NY: kategori=X, default_unit=Y)
-   - ...
+
+👩‍🍳 Instruktioner:
+   1. …
+   2. …
+
+📒 Notes:
+   💡 Proffstips: …
+   🔬 Vetenskap: …
+   🎨 Alternativ: …
 
 ═══════════════════════════════════
 Säg "push" för att spara,
 eller ge feedback för att justera.
 ```
 
-Visa **inte** numeriska recept-ID:n i previewen — de tilldelas först vid spar (API:t/VPS returnerar ID). Undantag: 3c (direkt SSH) där du kan visa preliminärt ID (MAX(id)+1 från VPS).
+Visa **inte** recept-ID i previewen — servern tilldelar det vid spar.
 
 ### Steg 3 — Push
 
-Sourca `.claude/.env` och välj väg enligt "Spara-vägar" ovan: **3a om API är konfigurerat** (normalfallet), annars reservväg 3b/3c.
+Bara när Nils har sagt **"push"**. Sourca `.claude/.env` och välj väg enligt "Spara-väg" ovan.
 
-#### 3a — HTTP-API (förstahandsval, båda miljöerna)
+#### 3a — HTTP-API (normalfallet)
 
-`POST $RECIPE_API_URL/api/recipe` med `Authorization: Bearer $RECIPE_API_TOKEN`. Body = receptet (samma fält som schemat nedan, utan `operation`/`schema_version`). Befintliga ingredienser behöver bara `name` (kanoniskt namn eller alias); nya kräver `grocery_category` + `default_unit`.
+`POST $RECIPE_API_URL/api/recipe` med `Authorization: Bearer $RECIPE_API_TOKEN`. Body = receptet (samma fält som pending-schemat nedan, utan `operation`/`schema_version`/`created_*`). Befintliga ingredienser behöver bara `name`; nya kräver `grocery_category` + `default_unit`.
 
 ```bash
 curl -sS -X POST \
@@ -306,11 +266,11 @@ curl -sS -X POST \
   -d @- "$RECIPE_API_URL/api/recipe" <<'JSON'
 {
   "title": "Snabbtacos med halloumi",
-  "description": "...",
-  "instructions": "1. ...\n2. ...",
-  "notes": null,
-  "tags": "vegetariskt,tacos",
-  "type": "Tacos",
+  "description": "… 4 portioner.",
+  "instructions": "1. …\n2. …",
+  "notes": "💡 Proffstips:\n- …\n🎨 Alternativ:\n- …",
+  "tags": "tacos,vegetariskt,snabbt",
+  "type": "huvudrätt",
   "kitchen": "🇲🇽 Mexikanskt",
   "ingredients": [
     {"name": "halloumi", "amount": "250", "unit": "g", "note": "",
@@ -323,50 +283,36 @@ JSON
 Svar `201` → `{"ok": true, "recipe_id": N, "version_number": 1, "changed_at": "..."}`. Bekräfta:
 
 ```
-✅ Sparat via API! [titel] (id: [recipe_id], version: 1)
+✅ Sparat i receptdatabasen (Pi)! [titel] (id: [recipe_id], version: 1)
    - [X] ingredienser kopplade ([Y] nya skapade)
 ```
 
 Felhantering:
-- `400` `"error": "Ingredient not in catalog"` → en ny ingrediens saknar `grocery_category`/`default_unit` (se `missing_fields` + `ingredient_name`). Fyll i och posta om. Hela inserten rullas tillbaka — inget halvsparat recept blir kvar.
-- `400` `title ... is required` → titel saknas/tom.
-- `401` / `503` → token/konfig-problem (kolla `.claude/.env` och `RECIPE_API_TOKEN` på VPS). **Logga aldrig token.**
+- `400` med `missing_fields` (`"error": "Ingredient not in catalog"`) → en ny ingrediens saknar `grocery_category`/`default_unit` (se `ingredient_name`). Fyll i och POSTa igen. Inget halvsparat blir kvar.
+- `400` `title ... is required` → titel saknas.
+- `401` → tokenen stämmer inte med Pi:ns. Be Nils om rätt token. **Skriv aldrig ut den.**
+- `503` → `RECIPE_API_TOKEN` är inte satt på servern.
+- Timeout / connection refused → Pi:n eller Tailscale nere (`tailscale status`). Erbjud pending-commit (3b).
 
-#### 3b — Pending-commit (reserv: Cowork utan API-konfig)
+#### 3b — Pending-commit (reserv)
 
-1. Bygg commit-objekt (schema nedan), skriv till `.claude/pending-commits/<ISO-timestamp>_<slug>.json`.
+1. Bygg commit-objekt (schema nedan) och skriv till `.claude/pending-commits/<ISO-timestamp>_<slug>.json`.
 2. Bekräfta:
 
 ```
 📦 Pending commit skapad: [filnamn]
-   Öppna Claude Code i projektmappen och säg "apply pending"
-   för att skriva till VPS-databasen.
+   Appliceras via API:t när det går att nå — säg "apply pending"
+   i Claude Code (eller kör scripts/skill_remote_commit.py).
 ```
 
-#### 3c — Direkt SSH (reserv: Claude Code utan API-konfig)
+## "apply pending"
 
-Via SSH, kör en transaktion mot `/opt/recipe-db/data/recipe.db`:
-- MAX(id) + 1 för nytt recept.
-- För varje ingrediens: `LOWER(name)`-matcha → återanvänd ID eller skapa ny.
-- INSERT i `recipe`, `recipe_ingredient`, samt `recipe_version` (`version_number = 1`, `changed_by = 'chat'`, `changed_at = <ISO-timestamp>`, `ingredients_json = <serialiserad lista>`).
-
-```
-✅ Sparat på VPS! [titel] (id: [id], version: 1)
-   - [X] ingredienser kopplade ([Y] nya skapade)
-```
-
-## "apply pending" (endast Claude Code-läge)
-
-När användaren säger **"apply pending"** eller **"push pending"**:
+När Nils säger **"apply pending"** eller **"push pending"**:
 
 1. `ls .claude/pending-commits/` — om tomt, rapportera det.
-2. Visa batch-preview: en rad per commit med filnamn, operation, titel.
-3. Vid bekräftelse, för varje fil:
-   - Parsa JSON.
-   - Kör push-flödet ovan (just nu bara `operation: "create"` — edits hanteras av `edit-recipe`-skillen via HTTP-API och ligger inte i pending-kön).
-   - Vid success: `mv <fil> .claude/applied-commits/`.
-   - Vid error: rapportera, låt filen ligga kvar.
-4. Rapportera slutresultat:
+2. Visa batch-preview: en rad per fil med filnamn och titel.
+3. Vid bekräftelse: `python3 scripts/skill_remote_commit.py .claude/pending-commits/*.json`. Skriptet POSTar varje fil till `$RECIPE_API_URL/api/recipe` och flyttar filen till `.claude/applied-commits/` vid success. Vid fel ligger filen kvar.
+4. Rapportera:
 
 ```
 ✅ Applicerat [N] pending commits
@@ -380,11 +326,11 @@ När användaren säger **"apply pending"** eller **"push pending"**:
   "schema_version": "1",
   "operation": "create",
   "title": "Snabbtacos med halloumi",
-  "description": "...",
-  "instructions": "1. ...\n2. ...",
-  "notes": null,
-  "tags": "vegetariskt,tacos",
-  "type": "Tacos",
+  "description": "… 4 portioner.",
+  "instructions": "1. …\n2. …",
+  "notes": "💡 Proffstips:\n- …\n🎨 Alternativ:\n- …",
+  "tags": "tacos,vegetariskt,snabbt",
+  "type": "huvudrätt",
   "kitchen": "🇲🇽 Mexikanskt",
   "ingredients": [
     {
@@ -402,20 +348,17 @@ När användaren säger **"apply pending"** eller **"push pending"**:
 }
 ```
 
-Filnamn: `.claude/pending-commits/<YYYY-MM-DDTHH-MM-SSZ>_<slug>.json`. `slug` = lowercase, bindestreck istället för mellanslag, ASCII-safe.
-
-> **Notera:** `operation: "update"` används inte längre i pending-commit-flödet — edits hanteras av `edit-recipe`-skillen via HTTP-API. Den här skillen ska bara producera `create`-commits.
+Filnamn: `.claude/pending-commits/<YYYY-MM-DDTHH-MM-SSZ>_<slug>.json`. `slug` = gemener, bindestreck, ASCII-safe. Bara `operation: "create"` — edits går via `edit-recipe`.
 
 ## Viktiga regler
 
-- **ID-hantering**: Via API:t (3a) tilldelas och returneras ID:t av servern — hitta aldrig på det. Bara i SSH-vägen (3c) läser du MAX(id) själv. Aldrig hårdkodade ID:n.
-- **Ingrediensmatchning**: mot **prod-katalogen** (API), NOCASE + alias-lookup. Använd alltid kanoniskt namn från DB:n, aldrig din egen stavning om det finns en träff. Lokal snapshot är fallback och flaggas i previewen.
-- **Nya ingredienser**: kräver `grocery_category` (från listan) + `default_unit` + `kitchen_staple` (1 för skafferisaker som salt/peppar/olja, annars 0). Saknas något → DB:n rejectar med CHECK/NOT NULL.
-- **Granularitet**: bara det som inhandlas separat. `äggula` ≠ ny rad. `gullök` vs `silverlök` = separata rader.
-- **Instruktioner**: Numrerade steg, separerade med newlines.
-- **notes**: NULL om inget speciellt.
-- **Transaktioner**: API:t (3a) gör hela sparet atomiskt. I SSH-vägen (3c) kapsla in allt i `BEGIN; ... COMMIT;` (ROLLBACK vid fel).
-- **Visa alltid preview innan push** — aldrig direkt till DB utan bekräftelse.
-- **Versionshistorik**: Varje push (nytt eller edit) loggar en rad i `recipe_version`.
-- **Lokal snapshot skrivs aldrig**: lokal `recipe.db` är strikt read-only (ingrediens-matching/preview). Skrivning går via API (3a), pending-commit (3b) eller SSH mot VPS (3c) — aldrig mot snapshoten.
-- **Edits → annan skill**: Om användaren vill ändra ett befintligt recept, säg "Det här är `edit-recipe`-territorium — invokera den" istället för att gå vidare.
+- **Skriv aldrig direkt till SQLite.** Enda skrivvägen är API:t (3a); pending-commit (3b) appliceras också via API:t.
+- **ID**: tilldelas av servern. Hitta aldrig på eller hårdkoda ID:n.
+- **Ingrediensmatchning**: mot katalogen från API:t, `name` + `aliases`, case-insensitive, kanoniskt namn.
+- **Nya ingredienser**: `grocery_category` (från listan) + `default_unit` + `kitchen_staple` (1 för skafferivaror som salt/peppar/olja, annars 0).
+- **Granularitet**: bara det som handlas separat. `äggula` ≠ ny rad.
+- **Instruktioner**: numrerade steg med temp/tid, separerade med newlines.
+- **notes**: proffstips + (vetenskap) + alternativ, aldrig tomt.
+- **Visa alltid preview innan push** — spara först på "push".
+- **Versionshistorik**: varje push loggar `recipe_version` v1 (servern gör det).
+- **Edits → annan skill**: vill Nils ändra ett befintligt recept, säg "Det här är `edit-recipe`-territorium" och byt skill.
