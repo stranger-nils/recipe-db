@@ -75,7 +75,7 @@ docs/                       # design notes and the workflow plan
 .claude/skills/             # recipe, edit-recipe, shopping-list — custom Claude skills
 ```
 
-The HTTP API lives in `app.py` under `/api/recipe/*` and is documented in [`CLAUDE.md`](CLAUDE.md), along with the working-modes split (Cowork for authoring, Claude Code for tailnet work like publishing week plans).
+The HTTP API lives in `app.py` under `/api/recipe/*` and is documented in [`CLAUDE.md`](CLAUDE.md), along with the working-modes split (Cowork for authoring, Claude Code for work on the Mac).
 
 ---
 

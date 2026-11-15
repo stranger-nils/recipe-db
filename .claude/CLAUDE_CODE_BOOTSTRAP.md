@@ -57,9 +57,9 @@ Om du lägger till en ny skill: skapa under `.claude/skills/<namn>/SKILL.md`, k�
 1. Visa batch-preview av filerna i `.claude/pending-commits/`, bekräfta.
 2. `python3 scripts/skill_remote_commit.py .claude/pending-commits/*.json` — POSTar varje fil till API:t och flyttar lyckade till `.claude/applied-commits/`.
 
-**Kodändringar i Flask-appen** — appen på Pi:n deployas från repot `stranger-nils/iris-workspace`, inte härifrån: branch → PR → Nils reviewar → merge → Iris deployar automatiskt (docker build/run + healthcheck; från värden finns `scripts/pi-deploy.sh` med `docker-compose.rpi.yml`). En push till `master` här deployar ingenting.
+**Kodändringar i Flask-appen** — det här repot ingår som submodul `recipe-db/` i `stranger-nils/iris-workspace`, och Pi:n kör den commit som submodulen pekar på. Flödet (sedan 2026-11-10): branch → PR i `stranger-nils/recipe-db` → Nils reviewar → merge till `master` → PR i `iris-workspace` som bumpar submodulen → merge → Iris deployar automatiskt (docker build/run + healthcheck; från värden finns `scripts/pi-deploy.sh` med `docker-compose.rpi.yml`). En push till `master` här deployar ingenting förrän submodulen är bumpad.
 
-**Migrationer** — körs på Pi:n via deploy-flödet ovan (i `iris-workspace`), inte via SSH härifrån.
+**Migrationer** — körs på Pi:n via deploy-flödet ovan, inte via SSH härifrån.
 
 ## Viktiga paths
 

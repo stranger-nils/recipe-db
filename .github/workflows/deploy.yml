@@ -1,6 +1,7 @@
 # LEGACY — the recipe DB and app moved from the VPS (minvps, /opt/recipe-db,
-# recipedb.cloud) to the Raspberry Pi (nils-rpi) in 2026-11. The Pi is deployed
-# from stranger-nils/iris-workspace: branch → PR → review → merge → Iris runs
+# recipedb.cloud) to the Raspberry Pi (nils-rpi) in 2026-11. The Pi runs the
+# commit that the recipe-db/ submodule in stranger-nils/iris-workspace points
+# to: merge here → PR bumping the submodule there → merge → Iris runs
 # docker build/run + healthcheck (scripts/pi-deploy.sh, docker-compose.rpi.yml).
 #
 # This workflow no longer runs on push. It is kept, manual-only, in case the

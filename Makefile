@@ -4,9 +4,9 @@
 #   make dev         docker compose up --build (Flask på :5001) mot lokal ./data/.
 #   make logs        Tail på containerns loggar.
 #   make dev-down    docker compose down.
-#   make ship        Pushar master till GitHub. Deployar INGENTING — appen på
-#                    Pi:n (nils-rpi) deployas via PR i stranger-nils/iris-workspace
-#                    som Iris rullar ut efter merge.
+#   make ship        Pushar master till GitHub. Deployar INGENTING — Pi:n kör den
+#                    commit som submodulen recipe-db/ i stranger-nils/iris-workspace
+#                    pekar på; bumpa den via PR där, så deployar Iris efter merge.
 #
 # Spår B — dataändringar (recept) hanteras via recipe/edit-recipe-skillarna,
 # som skriver till Pi:ns databas via HTTP-API:t.
@@ -46,6 +46,6 @@ ship:
 		echo "✗ Not on master (on $$(git rev-parse --abbrev-ref HEAD)). Switch first."; \
 		exit 1; \
 	fi
-	@echo "→ Pushing to origin/master (no deploy — Pi deploys via iris-workspace PR)"
+	@echo "→ Pushing to origin/master (no deploy — bump the submodule in iris-workspace)"
 	git push origin master
 	@echo "✓ Pushed."

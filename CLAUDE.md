@@ -76,7 +76,7 @@ Starts Flask dev server on `http://localhost:5001`.
 pip install -r requirements.txt
 ```
 
-**Production:** runs on the Pi, deployed via `iris-workspace` (see Deployment below).
+**Production:** runs on the Pi, deployed via a submodule bump in `iris-workspace` (see Deployment below).
 
 **Import CSV data to SQLite (one-off bootstrap):**
 ```bash
@@ -100,7 +100,7 @@ Single-file Flask app (`app.py`) with Jinja2 templates and SQLAlchemy for databa
 
 **Frontend:** Inline CSS in Jinja2 templates, jQuery + Select2 for multi-select ingredient filters, vanilla JS elsewhere. No build step.
 
-**Deployment:** The app runs in a container on the Pi (`nils-rpi`), API at `http://100.127.88.96:5001` (Tailscale) / `http://192.168.1.82:5001` (LAN). Since 2026-11-10 code changes go branch → PR in `stranger-nils/iris-workspace` → Nils reviews → merge → Iris deploys automatically (docker build/run + healthcheck; on the host: `scripts/pi-deploy.sh` with `docker-compose.rpi.yml`). New recipes need no deploy. Pushing to `master` in this repo deploys nothing; the old VPS workflow (`.github/workflows/deploy.yml`) is manual-only legacy.
+**Deployment:** The app runs in a container on the Pi (`nils-rpi`), API at `http://100.127.88.96:5001` (Tailscale) / `http://192.168.1.82:5001` (LAN). This repo is the `recipe-db/` submodule of `stranger-nils/iris-workspace`; the Pi runs whatever commit the submodule points to. Since 2026-11-10 code changes go branch → PR in `stranger-nils/recipe-db` → Nils reviews → merge to `master` → PR in `iris-workspace` bumping the submodule → merge → Iris deploys automatically (docker build/run + healthcheck; on the host: `scripts/pi-deploy.sh` with `docker-compose.rpi.yml`). New recipes need no deploy. Pushing to `master` here deploys nothing until the submodule is bumped; the old VPS workflow (`.github/workflows/deploy.yml`) is manual-only legacy.
 
 ## Recipe HTTP API
 
