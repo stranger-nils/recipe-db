@@ -12,6 +12,10 @@
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z"/><path d="M21 21l-4-4"/></svg>
   <input id="rec-search" placeholder="Sök recept…" autocomplete="off" />
 </div>
+<div class="facets" id="rec-facets">
+  <div class="facet-row" id="rec-tag-tiles" role="group" aria-label="Filtrera på tagg"></div>
+  <div class="facet-row facet-types" id="rec-type-tiles" role="group" aria-label="Filtrera på typ"></div>
+</div>
 <div class="exp-filter" id="rec-status-filter">
   <button class="filter-pill active" data-status-filter="">Alla</button>
   <button class="filter-pill" data-status-filter="cooked">✓ Lagade</button>
@@ -21,6 +25,6 @@
   <div class="exp-mini">
     <a class="exp-mini-btn" href="/recipe/new/edit">+ nytt</a>
   </div>
-  <span class="exp-count" id="rec-count"></span>
+  <span class="exp-count"><button class="facet-clear" id="rec-clear" hidden>rensa filter</button><span id="rec-count"></span></span>
 </div>
 <div class="exp-scroll" id="rec-tree"></div>

@@ -23,6 +23,37 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///recipe.db")
 engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
 
 
+# ---------------------------------------------------------------------------
+# Kategorisering — en fast, liten taxonomi.
+#   kitchen : alltid nationalitet, med flagga ("🇮🇹 Italienskt").
+#   type    : menyrubrik — var på en meny rätten skulle stå.
+#   tags    : få, användbara tillfällen/egenskaper — visas som filter-tiles.
+# Ordningen här är visningsordningen i UI:t. Värden utanför listorna
+# tolereras (fritext via API:t) men blir aldrig filter-tiles.
+# ---------------------------------------------------------------------------
+
+RECIPE_TYPES = [
+    'frukost', 'förrätt', 'tapas', 'soppa', 'sallad', 'macka', 'tacos',
+    'pasta', 'nudlar', 'huvudrätt', 'tillbehör', 'grundrecept', 'efterrätt',
+]
+
+RECIPE_TAGS = [
+    'vardag', 'fredagsmiddag', 'långkok', 'bjudning',
+    'matlåda', 'barnvänligt', 'vegetariskt',
+]
+
+
+def _present(values, canonical):
+    """The canonical values that occur in `values`, in canonical order.
+    Used for filter tiles — legacy free-text values never become tiles."""
+    present = set(values)
+    return [v for v in canonical if v in present]
+
+
+def _split_tags(raw):
+    return [t.strip() for t in (raw or '').split(',') if t.strip()]
+
+
 def _backup_before_edit(note: str | None = None) -> None:
     """Take a pre-edit SQLite snapshot if BACKUP_DIR is configured.
     No-op on local dev (BACKUP_DIR unset). Failures are logged but never
@@ -205,14 +236,22 @@ def apply_recipe_edit(conn, recipe_id, new_state, change_note=None,
     #     snapshot we just froze. The content the user cooked/evaluated now lives
     #     at recipe_version.next_ver, so its tillagningsstatus must follow it.
     #     The new live state (version 0) is thereby left unproven again.
-    try:
-        conn.execute(text('''
-            UPDATE cook_log SET version_number=:next_ver, updated_at=:now
-            WHERE recipe_id=:rid AND version_number=0
-        '''), {'next_ver': next_ver, 'now': now, 'rid': recipe_id})
-    except Exception:
-        # cook_log saknas (migration 008 ej körd) — edit ska inte blockeras.
-        pass
+    #     Exception: an edit that only touches categorisation (kitchen, type,
+    #     tags) doesn't change what gets cooked, so the status stays put.
+    content_fields = ('title', 'description', 'instructions', 'notes')
+    content_changed = any(
+        k in new_state and (new_state[k] or '') != (cur_recipe[k] or '')
+        for k in content_fields
+    ) or (new_state.get('ingredients') is not None)
+    if content_changed:
+        try:
+            conn.execute(text('''
+                UPDATE cook_log SET version_number=:next_ver, updated_at=:now
+                WHERE recipe_id=:rid AND version_number=0
+            '''), {'next_ver': next_ver, 'now': now, 'rid': recipe_id})
+        except Exception:
+            # cook_log saknas (migration 008 ej körd) — edit ska inte blockeras.
+            pass
 
     # 2. UPDATE the recipe row (preserve current value for fields not in new_state).
     conn.execute(text('''
@@ -405,7 +444,7 @@ def _ide_data(mode):
     of the explorer/palette/planning. Kept lean — only fields the JS needs."""
     with engine.connect() as conn:
         recipe_rows = conn.execute(text('''
-            SELECT r.id, r.title, r.kitchen, r.type,
+            SELECT r.id, r.title, r.kitchen, r.type, r.tags,
                    COALESCE((SELECT MAX(version_number) FROM recipe_version v WHERE v.recipe_id=r.id), 0) AS version_count,
                    (SELECT cl.status FROM cook_log cl WHERE cl.recipe_id=r.id AND cl.version_number=0) AS cook_status
             FROM recipe r ORDER BY r.title
@@ -413,9 +452,19 @@ def _ide_data(mode):
         catalog = conn.execute(text(
             'SELECT id, name, grocery_category FROM ingredient ORDER BY name'
         )).mappings().all()
+    recipes = []
+    for r in recipe_rows:
+        d = dict(r)
+        d['tags'] = _split_tags(d.get('tags'))
+        recipes.append(d)
+    facets = {
+        'types': _present({(r['type'] or '').strip() for r in recipes}, RECIPE_TYPES),
+        'tags': _present({t for r in recipes for t in r['tags']}, RECIPE_TAGS),
+    }
     return {
         'mode': mode,
-        'recipes': [dict(r) for r in recipe_rows],
+        'recipes': recipes,
+        'facets': facets,
         'catalog': [dict(c) for c in catalog],
     }
 
@@ -995,21 +1044,10 @@ def _category_options(conn):
         "WHERE kitchen IS NOT NULL AND TRIM(kitchen) != '' "
         "ORDER BY kitchen COLLATE NOCASE"
     )).all()]
-    types = [r[0] for r in conn.execute(text(
-        "SELECT DISTINCT type FROM recipe "
-        "WHERE type IS NOT NULL AND TRIM(type) != '' "
-        "ORDER BY type COLLATE NOCASE"
-    )).all()]
-    raw_tags = [r[0] for r in conn.execute(text(
-        "SELECT tags FROM recipe WHERE tags IS NOT NULL AND TRIM(tags) != ''"
-    )).all()]
-    tag_set = set()
-    for raw in raw_tags:
-        for t in raw.split(','):
-            t = t.strip()
-            if t:
-                tag_set.add(t)
-    tags = sorted(tag_set, key=lambda s: s.lower())
+    # type och tags erbjuds från den fasta taxonomin — gamla fritextvärden
+    # ska inte föreslås igen.
+    types = list(RECIPE_TYPES)
+    tags = list(RECIPE_TAGS)
     return {'kitchens': kitchens, 'types': types, 'tags': tags}
 
 

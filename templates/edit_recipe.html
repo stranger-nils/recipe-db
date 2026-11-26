@@ -89,25 +89,24 @@
                 <label for="kitchen">Kök</label>
                 <input type="text" id="kitchen" name="kitchen" value="{{ recipe.kitchen }}"
                        list="kitchen-options" autocomplete="off"
-                       placeholder="t.ex. Italienskt" />
+                       placeholder="nationalitet, t.ex. 🇮🇹 Italienskt" />
                 <datalist id="kitchen-options">
                   {% for k in options.kitchens %}<option value="{{ k }}">{% endfor %}
                 </datalist>
               </div>
               <div class="field">
                 <label for="type">Typ</label>
-                <input type="text" id="type" name="type" value="{{ recipe.type }}"
-                       list="type-options" autocomplete="off"
-                       placeholder="förrätt, huvudrätt…" />
-                <datalist id="type-options">
-                  {% for t in options.types %}<option value="{{ t }}">{% endfor %}
-                </datalist>
+                <select id="type" name="type">
+                  <option value=""{% if not recipe.type %} selected{% endif %}>—</option>
+                  {% for t in options.types %}<option value="{{ t }}"{% if recipe.type == t %} selected{% endif %}>{{ t }}</option>{% endfor %}
+                  {% if recipe.type and recipe.type not in options.types %}<option value="{{ recipe.type }}" selected>{{ recipe.type }} (gammalt värde)</option>{% endif %}
+                </select>
               </div>
             </div>
             <div class="field">
               <label for="tags">Taggar</label>
               <input type="text" id="tags" name="tags" value="{{ recipe.tags }}"
-                     autocomplete="off" placeholder="kommaseparerat — t.ex. snabbt, vegetariskt" />
+                     autocomplete="off" placeholder="kommaseparerat — t.ex. vardag, matlåda" />
               {% if options.tags %}
                 <div class="ef-chips" data-tag-chips>
                   {% for t in options.tags %}<span class="chip chip-btn" data-tag="{{ t }}">{{ t }}</span>{% endfor %}

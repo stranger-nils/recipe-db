@@ -93,6 +93,36 @@ a{ color:inherit; text-decoration:none; }
 .exp-count{ font-family:var(--mono); font-size:10.5px; color:var(--ink3); }
 .exp-scroll{ flex:1; overflow-y:auto; padding:4px 8px 16px; }
 
+/* ---- tile-filter (taggar + typer) ----
+   Taggar: större block med kraftig kant — primärfiltret.
+   Typer: tätare, mindre block under. Båda radbryts i egen bredd så
+   etiketterna aldrig kapas. På = svart bläck, inte accent —
+   accent är reserverad för aktiv status/länkar. */
+.facets{ margin:0 12px 10px; display:flex; flex-direction:column; gap:8px; }
+.facet-row{ display:flex; flex-wrap:wrap; gap:4px; }
+.facet-row:empty{ display:none; }
+.tile{ display:inline-flex; align-items:baseline; gap:6px; flex:0 0 auto;
+  padding:7px 9px; background:var(--paper); color:var(--ink); border:1px solid var(--line2);
+  font-family:var(--sans); font-size:12.5px; text-align:left; transition:background .1s, color .1s; }
+.facet-types .tile{ padding:4px 7px; font-size:11.5px; border-color:var(--line); }
+.tile.on, .facet-types .tile.on{ border-color:var(--ink); }
+.tile-l{ white-space:nowrap; }
+.tile-n{ font-family:var(--mono); font-size:10px; color:var(--ink3); flex:none; }
+.tile:hover{ background:var(--bg); }
+.tile.on{ background:var(--ink); color:var(--paper); }
+.tile.on .tile-n{ color:var(--line2); }
+.tile.dim{ color:var(--line2); }
+.tile.dim .tile-n{ color:var(--line); }
+.tile:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+.facet-clear{ font-family:var(--mono); font-size:10.5px; color:var(--accent); padding:0; margin-right:8px; }
+.facet-clear:hover{ text-decoration:underline; text-underline-offset:2px; }
+.chip-tag{ cursor:pointer; }
+.chip-tag:hover{ border-color:var(--ink); color:var(--ink); }
+@media (pointer:coarse){
+  .tile{ padding:11px 10px; font-size:13.5px; }
+  .facet-types .tile{ padding:9px 8px; font-size:12.5px; }
+}
+
 .tree-group{ margin-bottom:2px; }
 .tree-group-h{ display:flex; align-items:center; gap:7px; width:100%; text-align:left; cursor:pointer;
   padding:6px 8px 3px; color:var(--ink2); background:none;
@@ -697,12 +727,12 @@ textarea:focus-visible, [tabindex]:focus-visible{
   text-transform:uppercase; color:var(--ink2); margin-bottom:7px; font-weight:500; }
 .lbl-note{ text-transform:none; letter-spacing:0; color:var(--ink3); font-size:10.5px; }
 .req{ color:var(--accent); font-style:normal; }
-.field input[type="text"], .field textarea{
+.field input[type="text"], .field select, .field textarea{
   width:100%; background:var(--paper); border:none; border-bottom:1px solid var(--line2);
   padding:9px 2px; font-family:var(--sans); font-size:var(--fs); color:var(--ink);
   outline:none; transition:border-color .12s, box-shadow .12s; }
-.field input[type="text"]:hover, .field textarea:hover{ border-bottom-color:var(--ink3); }
-.field input[type="text"]:focus, .field textarea:focus{ border-bottom-color:var(--accent);
+.field input[type="text"]:hover, .field select:hover, .field textarea:hover{ border-bottom-color:var(--ink3); }
+.field input[type="text"]:focus, .field select:focus, .field textarea:focus{ border-bottom-color:var(--accent);
   box-shadow:inset 0 -1px 0 var(--accent); }
 .field textarea{ resize:vertical; line-height:1.55; }
 .row{ display:grid; grid-template-columns:1fr 1fr; gap:0 calc(var(--u)*3); }

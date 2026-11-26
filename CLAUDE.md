@@ -56,7 +56,7 @@ Custom skills for this project live in `.claude/skills/`. They are the source of
 
 | Skill | Purpose |
 |---|---|
-| `recipe` | Brainstorm and save *new* recipes. Writes only via the HTTP API (`POST /api/recipe`); pending-commits are the fallback when the API is unreachable. Follows the house rules shared with Iris (4 portions, numbered steps with temp/time, pro tips + alternatives in `notes`, `type` enum). Slash: `/recipe`. |
+| `recipe` | Brainstorm and save *new* recipes. Writes only via the HTTP API (`POST /api/recipe`); pending-commits are the fallback when the API is unreachable. Follows the house rules shared with Iris (4 portions, numbered steps with temp/time, pro tips + alternatives in `notes`, fixed categorisation: `kitchen` = nationality, `type` = menu section, `tags` from a short fixed list — see `RECIPE_TYPES`/`RECIPE_TAGS` in `app.py`). Slash: `/recipe`. |
 | `edit-recipe` | Iterate on an *existing* recipe via post-cook reflection. Reads/writes via the HTTP API (`RECIPE_API_TOKEN`). Logs a new version with a `change_note`. Slash: `/edit-recipe`. |
 | `shopping-list` | Build a consolidated shopping list from recipes in the Notion Recept-pipeline; save as a categorized entry in the Notion Inköpslistor database. |
 | `grossist-order` | Fill a Mathem cart from a shopping list. Reads search results as text, adds via each product article's own button, and remembers the chosen product URL per ingredient. Stops at a filled cart — Nils checks out himself. Slash: `/grossist-order`. |
@@ -93,6 +93,8 @@ Single-file Flask app (`app.py`) with Jinja2 templates and SQLAlchemy for databa
 - Connection configured via the `DATABASE_URL` env var; defaults to `sqlite:///recipe.db`.
 - Raw SQL via SQLAlchemy `text()` — no ORM models, just direct queries.
 - Retired: the VPS (`minvps`, `/opt/recipe-db`, `https://recipedb.cloud`). Its DB is frozen at recipe id 41.
+
+**Categorisation:** `kitchen` is always a nationality with flag (`🇮🇹 Italienskt`); `type` and `tags` come from `RECIPE_TYPES` / `RECIPE_TAGS` in `app.py`, which also drive the filter tiles in the recipe explorer. An edit that only touches `kitchen`/`type`/`tags` keeps the recipe's cook status.
 
 **Tables:** `recipe`, `ingredient`, `recipe_ingredient` (many-to-many junction). Version history (`recipe_version`) is a planned addition; see the workflow overhaul plan.
 
