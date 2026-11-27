@@ -6,6 +6,7 @@
   const MODE = DATA.mode;                       // 'recept' | 'ingredienser' | 'planering'
   const RECIPES = DATA.recipes || [];           // [{id,title,kitchen,type,version_count}]
   const CATALOG = DATA.catalog || [];           // [{name,grocery_category}]
+  const FACETS = DATA.facets || { types: [], tags: [] };  // visningsordning från app.py
   const TAB_STORAGE_KEY = "mise.tabs.v1";
 
   /* ---------- helpers ---------- */
@@ -54,7 +55,9 @@
       const k = (r[field] || "(Ej angiven)").trim();
       (map[k] = map[k] || []).push(r);
     });
-    return Object.keys(map).sort((a, b) => a.localeCompare(b, "sv"))
+    const order = field === "type" ? FACETS.types : [];
+    const rank = (k) => { const i = order.indexOf(k); return i < 0 ? order.length : i; };
+    return Object.keys(map).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, "sv"))
       .map((k) => ({ key: k, items: map[k].sort((a, b) => a.title.localeCompare(b.title, "sv")) }));
   }
 
@@ -168,14 +171,86 @@
     if (recGrouping) recGrouping.value = grouping;
     let statusFilter = "";  // "" | "cooked" | "none"
 
-    function renderTree() {
+    /* Tile-filter: taggar kombineras med OCH (vardag + barnvänligt),
+       typer med ELLER (pasta eller nudlar). Sparas per enhet. */
+    const FILTER_KEY = "mise.recFacets.v1";
+    let facetSel = { tags: [], types: [] };
+    try {
+      const saved = JSON.parse(localStorage.getItem(FILTER_KEY)) || {};
+      facetSel.tags = (saved.tags || []).filter((t) => FACETS.tags.includes(t));
+      facetSel.types = (saved.types || []).filter((t) => FACETS.types.includes(t));
+    } catch (_) {}
+    const tagTiles = $("#rec-tag-tiles");
+    const typeTiles = $("#rec-type-tiles");
+    const clearBtn = $("#rec-clear");
+
+    function matchesBase(r) {
       const q = (recSearch.value || "").toLowerCase().trim();
-      const filtered = RECIPES.filter((r) => {
-        if (q && !(r.title.toLowerCase().includes(q) || (r.kitchen || "").toLowerCase().includes(q))) return false;
-        if (statusFilter === "none") return !r.cook_status;
-        if (statusFilter) return r.cook_status === statusFilter;
-        return true;
-      });
+      if (q && !(r.title.toLowerCase().includes(q)
+          || (r.kitchen || "").toLowerCase().includes(q)
+          || (r.type || "").toLowerCase().includes(q)
+          || (r.tags || []).some((t) => t.includes(q)))) return false;
+      if (statusFilter === "none") return !r.cook_status;
+      if (statusFilter) return r.cook_status === statusFilter;
+      return true;
+    }
+    function matchesTags(r, tags) { return tags.every((t) => (r.tags || []).includes(t)); }
+    function matchesTypes(r, types) { return !types.length || types.includes((r.type || "").trim()); }
+
+    function persistFacets() {
+      try { localStorage.setItem(FILTER_KEY, JSON.stringify(facetSel)); } catch (_) {}
+    }
+    function toggleFacet(kind, value) {
+      const arr = facetSel[kind];
+      const i = arr.indexOf(value);
+      if (i < 0) arr.push(value); else arr.splice(i, 1);
+      persistFacets();
+      renderTree();
+    }
+    // Används från receptvyn: klick på en tagg-chip filtrerar listan.
+    window._miseFilterByTag = (tag) => {
+      if (!FACETS.tags.includes(tag)) return;
+      facetSel = { tags: [tag], types: [] };
+      persistFacets();
+      renderTree();
+      ideEl && ideEl.classList.add("show-explorer");
+    };
+
+    function renderTiles(base) {
+      // Siffran = antal träffar om tilen slogs på, givet övriga val.
+      // Tiles som skulle ge 0 tonas ned.
+      const tileHtml = (kind, value, n) => {
+        const on = facetSel[kind].includes(value);
+        return `<button class="tile${on ? " on" : ""}${!on && !n ? " dim" : ""}" data-kind="${kind}" data-value="${escapeHtml(value)}" aria-pressed="${on}">` +
+          `<span class="tile-l">${escapeHtml(value)}</span><span class="tile-n">${n}</span></button>`;
+      };
+      if (tagTiles) {
+        tagTiles.innerHTML = FACETS.tags.map((t) => {
+          const tags = facetSel.tags.includes(t) ? facetSel.tags : facetSel.tags.concat(t);
+          const n = base.filter((r) => matchesTypes(r, facetSel.types) && matchesTags(r, tags)).length;
+          return tileHtml("tags", t, n);
+        }).join("");
+      }
+      if (typeTiles) {
+        typeTiles.innerHTML = FACETS.types.map((t) => {
+          const n = base.filter((r) => matchesTags(r, facetSel.tags) && (r.type || "").trim() === t).length;
+          return tileHtml("types", t, n);
+        }).join("");
+      }
+      $$(".tile", $("#rec-facets")).forEach((b) =>
+        b.addEventListener("click", () => toggleFacet(b.dataset.kind, b.dataset.value)));
+      if (clearBtn) clearBtn.hidden = !(facetSel.tags.length || facetSel.types.length);
+    }
+    clearBtn && clearBtn.addEventListener("click", () => {
+      facetSel = { tags: [], types: [] };
+      persistFacets();
+      renderTree();
+    });
+
+    function renderTree() {
+      const base = RECIPES.filter(matchesBase);
+      const filtered = base.filter((r) => matchesTags(r, facetSel.tags) && matchesTypes(r, facetSel.types));
+      renderTiles(base);
       const groups = groupRecipes(filtered, grouping);
       recCount.textContent = filtered.length + " recept";
       if (!filtered.length) { recTree.innerHTML = '<div class="empty sm">Inga träffar.</div>'; return; }
@@ -219,6 +294,10 @@
     renderTree();
 
     window._miseHighlightTree = highlightActiveTreeRow;
+    editorBody && editorBody.addEventListener("click", (e) => {
+      const chip = e.target.closest("[data-tag-filter]");
+      if (chip) window._miseFilterByTag(chip.dataset.tagFilter);
+    });
     // Uppdatera galleriets cook-status in-place efter en ändring i en receptvy.
     window._miseRefreshCookStatus = (recipeId, status) => {
       const r = RECIPES.find((x) => x.id === recipeId);

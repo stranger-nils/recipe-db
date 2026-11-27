@@ -98,8 +98,8 @@ Varje recept som föreslås och sparas ska följa detta:
    ```
    Proffstips (1–3) och alternativ (1–3) är obligatoriska; vetenskap är valfritt.
 5. **Ingredienser** matchas mot ingredient-tabellen (`name` + `aliases`, case-insensitive) och får sitt **kanoniska namn**. En ny ingrediens kräver `grocery_category` (fast lista nedan) och `default_unit`.
-6. **`kitchen`** har alltid emoji-prefix (`🇮🇹 Italienskt`). **`tags`** skrivs med gemener.
-7. **`type`** är en av: `förrätt`, `huvudrätt`, `sidorätt`, `komponent`, `efterrätt` (gemener). Rättstypen (tacos, wok, pasta, soppa …) hör hemma i `tags`.
+6. **`kitchen`** är alltid en **nationalitet** med flagga (`🇮🇹 Italienskt`) — aldrig `Asiatiskt`, `Husmanskost`, `Grunder`, `Fusion` e.d.
+7. **`type`** är menyrubriken, exakt en av: `frukost`, `förrätt`, `tapas`, `soppa`, `sallad`, `macka`, `tacos`, `pasta`, `nudlar`, `huvudrätt`, `tillbehör`, `grundrecept`, `efterrätt` (gemener). **`tags`** väljs bara ur: `vardag`, `fredagsmiddag`, `långkok`, `bjudning`, `matlåda`, `barnvänligt`, `vegetariskt`.
 8. **Visa alltid en preview** och spara först när Nils säger **"push"**.
 9. Vid `400` med `missing_fields`: rätta och POSTa igen.
 
@@ -110,7 +110,7 @@ Gäller **både** API-body och pending-commit JSON:
 1. **Fältnamnen är `type` och `kitchen`** — INTE `section`/`menu` (döptes om i migration 005). Fel namn → NULL i kategoriseringen.
 2. **Varje *ny* ingrediens MÅSTE ha `default_unit`** (inte bara `unit`) **och** `grocery_category`. Annars 400 med `missing_fields`.
 3. **`kitchen` sätts aldrig ur minnet** — hämta befintliga värden live via API:t (se "Kategoriseringskonventioner") och kopiera därifrån.
-4. **`type` är enum-värdet med gemener**, inte en rättstyp. Databasen innehåller äldre värden som `Huvudrätt`, `Tacos`, `Wok` — återanvänd dem inte.
+4. **`type` och `tags` kommer ur de fasta listorna** (se "Kategoriseringskonventioner"). Inga råvaror, rättsnamn eller kök som taggar — de är sökbara ändå.
 
 ## Databas
 
@@ -194,17 +194,39 @@ print('TYPE:',    sorted({r['type']    for r in rows if r['type']}))
 
 (`q=` tomt → alla recept med `id`, `title`, `kitchen`, `type`.)
 
-**`kitchen`, i ordning:**
+**`kitchen`** = rättens nationalitet: flagga + mellanslag + adjektiv med versal (`🇮🇹 Italienskt`, `🇨🇳 Kinesiskt`, `🇸🇪 Svenskt`). Återanvänd befintlig sträng tecken för tecken. Nytt land → ny flagga, markera `(NYTT kök)`. Regionala kök slås ihop till landet (kantonesiskt → `🇨🇳 Kinesiskt`, nordiskt/husmanskost → `🇸🇪 Svenskt`). Fusion/osäkert → det land rättens grund kommer ifrån.
 
-1. **Exakt emoji-variant finns** (t.ex. `🇮🇹 Italienskt`) → använd strängen tecken för tecken, kopierad från utdatan.
-2. **Bara en variant utan emoji finns** (legacy) → bilda emoji-varianten av samma text och markera i previewen att den är normaliserad.
-3. **Köket finns inte** → nytt värde: **emoji + mellanslag + text med inledande versal** (flagga för nationella kök, annars passande emoji: `🍜 Asiatiskt`, `🍲 Grunder`). Markera `(NYTT kök)`.
+**`type`** = var rätten skulle stå på en meny. Exakt ett av:
 
-`kitchen` utan emoji är alltid fel.
+| type | för |
+|---|---|
+| `frukost` | frukost/brunch, smoothies |
+| `förrätt` | förrätter, plock till kräftskiva |
+| `tapas` | småplock att dela |
+| `soppa` | soppor |
+| `sallad` | sallader som måltid (niçoise, larb, tabbouleh) |
+| `macka` | smörgåsar, toasts, burgare |
+| `tacos` | tacos, burritos, tostadas med fyllning |
+| `pasta` | pastarätter |
+| `nudlar` | nudlar, ramen, wok med nudlar |
+| `huvudrätt` | övriga varmrätter (grytor, wok, curry, stekt, ugn) |
+| `tillbehör` | såser, dippar, salsor, toppings, ris |
+| `grundrecept` | fonder och baser som används i andra recept |
+| `efterrätt` | efterrätter |
 
-**`type`**: exakt ett av `förrätt`, `huvudrätt`, `sidorätt`, `komponent`, `efterrätt`. Gemener, ingen emoji. (En sås, fond eller dressing som används i andra rätter = `komponent`.)
+**`tags`** = kommaseparerat, gemener, **bara** ur listan (0–3 st räcker oftast):
 
-**`tags`**: kommaseparerade, gemener, ingen emoji. Här hamnar rättstyp, råvara och karaktär: `tacos,mexikanskt,nötkött,stark`.
+| tagg | när |
+|---|---|
+| `vardag` | enkel middag en vanlig kväll, ≲ 45 min |
+| `fredagsmiddag` | snabbt men festligt — tacos, mackor, tapas |
+| `långkok` | tar tid, mest passivt — helgprojekt |
+| `bjudning` | att servera gäster |
+| `matlåda` | håller/blir bättre dagen efter |
+| `barnvänligt` | milt, bekant, uppskattat av barn |
+| `vegetariskt` | inget kött eller fisk |
+
+Nya taggar läggs bara till i samråd med Nils, och då även i `RECIPE_TAGS` i `app.py` (styr filter-tiles på sajten).
 
 ## Arbetsflöde — Nytt recept
 
@@ -217,7 +239,7 @@ När Nils gillar ett recept och vill spara:
 
 1. **Bygg ingredienskatalogen** via API:t (`ingredient_catalog()`) och matcha varje ingrediens.
 2. **Hämta befintliga `kitchen`-värden** med query-steget ovan.
-3. **Föreslå kategorisering**: `tags` (gemener), `type` (enum), `kitchen` (befintlig emoji-variant, normaliserad eller ny).
+3. **Föreslå kategorisering**: `kitchen` (nationalitet), `type` (menyrubrik), `tags` (ur fasta listan).
 4. **Visa preview:**
 
 ```
@@ -269,8 +291,8 @@ curl -sS -X POST \
   "description": "… 4 portioner.",
   "instructions": "1. …\n2. …",
   "notes": "💡 Proffstips:\n- …\n🎨 Alternativ:\n- …",
-  "tags": "tacos,vegetariskt,snabbt",
-  "type": "huvudrätt",
+  "tags": "fredagsmiddag,vegetariskt",
+  "type": "tacos",
   "kitchen": "🇲🇽 Mexikanskt",
   "ingredients": [
     {"name": "halloumi", "amount": "250", "unit": "g", "note": "",
@@ -329,8 +351,8 @@ När Nils säger **"apply pending"** eller **"push pending"**:
   "description": "… 4 portioner.",
   "instructions": "1. …\n2. …",
   "notes": "💡 Proffstips:\n- …\n🎨 Alternativ:\n- …",
-  "tags": "tacos,vegetariskt,snabbt",
-  "type": "huvudrätt",
+  "tags": "fredagsmiddag,vegetariskt",
+  "type": "tacos",
   "kitchen": "🇲🇽 Mexikanskt",
   "ingredients": [
     {

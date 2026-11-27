@@ -26,7 +26,7 @@
     <div class="doc-meta">
       {% if recipe.kitchen %}<span class="chip">{{ recipe.kitchen }}</span>{% endif %}
       {% if recipe.type %}<span class="chip">{{ recipe.type }}</span>{% endif %}
-      {% if recipe.tags %}{% for tag in recipe.tags.split(',') %}{% if tag.strip() %}<span class="chip">{{ tag.strip() }}</span>{% endif %}{% endfor %}{% endif %}
+      {% if recipe.tags %}{% for tag in recipe.tags.split(',') %}{% if tag.strip() %}<button type="button" class="chip chip-tag" data-tag-filter="{{ tag.strip() }}" title="Visa alla recept taggade {{ tag.strip() }}">{{ tag.strip() }}</button>{% endif %}{% endfor %}{% endif %}
       <span class="chip"><b data-serv-display>{{ base_servings }}</b> port</span>
     </div>
   </header>
